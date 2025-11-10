@@ -2,10 +2,9 @@ import * as React from "react";
 import PropTypes from "prop-types";
 import Header from "./Header";
 import HeroList from "./HeroList";
-import TextInsertion from "./TextInsertion";
+import MermaidEditor from "./MermaidEditor";
 import { makeStyles } from "@fluentui/react-components";
 import { Ribbon24Regular, LockOpen24Regular, DesignIdeas24Regular } from "@fluentui/react-icons";
-import { insertText } from "../taskpane";
 
 const useStyles = makeStyles({
   root: {
@@ -21,23 +20,23 @@ const App = (props) => {
   const listItems = [
     {
       icon: <Ribbon24Regular />,
-      primaryText: "Achieve more with Office integration",
+      primaryText: "Compose and preview Mermaid diagrams in real time",
     },
     {
       icon: <LockOpen24Regular />,
-      primaryText: "Unlock features and functionality",
+      primaryText: "Experiment with flowcharts, sequence diagrams, and more",
     },
     {
       icon: <DesignIdeas24Regular />,
-      primaryText: "Create and visualize like a pro",
+      primaryText: "Share polished diagrams directly from your document",
     },
   ];
 
   return (
     <div className={styles.root}>
       <Header logo="assets/logo-filled.png" title={title} message="Welcome" />
-      <HeroList message="Discover what this add-in can do for you today!" items={listItems} />
-      <TextInsertion insertText={insertText} />
+      <HeroList message="Build and preview Mermaid diagrams without leaving Word." items={listItems} />
+      <MermaidEditor />
     </div>
   );
 };
