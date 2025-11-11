@@ -38,12 +38,11 @@ const useStyles = makeStyles({
   },
   editorPreview: {
     display: "flex",
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: "column",
     gap: "20px",
   },
   editorField: {
-    flex: "1 1 320px",
+    width: "100%",
   },
   codeMirrorWrapper: {
     border: `1px solid ${tokens.colorNeutralStroke1}`,
@@ -61,12 +60,12 @@ const useStyles = makeStyles({
     minWidth: "150px",
   },
   previewContainer: {
-    flex: "1 1 320px",
+    width: "100%",
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
     padding: "16px",
-    minHeight: "260px",
+    minHeight: "300px",
     overflow: "auto",
   },
   previewContent: {
@@ -75,6 +74,13 @@ const useStyles = makeStyles({
   error: {
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
+  },
+  loading: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    height: "200px",
+    color: tokens.colorNeutralForeground2,
   },
 });
 
@@ -104,8 +110,10 @@ const MermaidEditor = () => {
   const [error, setError] = React.useState("");
   const [canInsert, setCanInsert] = React.useState(false);
   const [theme, setTheme] = React.useState("default");
+  const [isLoading, setIsLoading] = React.useState(true);
   const previewRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
+  const debounceTimerRef = React.useRef(null);
 
   React.useEffect(() => {
     mermaid.initialize({
@@ -113,33 +121,58 @@ const MermaidEditor = () => {
       securityLevel: "strict",
       suppressErrorRendering: true,
       theme: theme,
+      fontFamily: "Arial, sans-serif",
+      fontSize: 16,
       flowchart: {
-        useMaxWidth: true,
+        useMaxWidth: false,
         htmlLabels: true,
-        curve: "basis"
+        curve: "basis",
+        padding: 20
       },
       sequence: {
-        useMaxWidth: true,
-        wrap: true
+        useMaxWidth: false,
+        wrap: true,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 35
       },
       gantt: {
-        useMaxWidth: true,
+        useMaxWidth: false,
         titleTopMargin: 25,
         barHeight: 20,
-        fontSize: 11,
-        sectionFontSize: 11
+        fontSize: 14,
+        sectionFontSize: 14,
+        gridLineStartPadding: 35,
+        gridLineEndPadding: 35,
+        barGap: 4,
+        topPadding: 50,
+        leftPadding: 75,
+        rightPadding: 75,
+        bottomPadding: 50
       },
       classDiagram: {
-        useMaxWidth: true
+        useMaxWidth: false,
+        padding: 20
       },
       stateDiagram: {
-        useMaxWidth: true
+        useMaxWidth: false,
+        padding: 20
       },
       pie: {
-        useMaxWidth: true
+        useMaxWidth: false,
+        textPosition: 0.75,
+        pieStrokeWidth: 2,
+        pieOuterStrokeWidth: 2,
+        pieInnerStrokeWidth: 2
       },
       journey: {
-        useMaxWidth: true
+        useMaxWidth: false,
+        padding: 20,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        leftMargin: 100,
+        rightMargin: 100
       }
     });
   }, [theme]);
@@ -152,6 +185,8 @@ const MermaidEditor = () => {
         return;
       }
 
+      setIsLoading(true);
+
       try {
         await mermaid.parse(code);
       } catch (err) {
@@ -162,6 +197,7 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = "";
         setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
         setCanInsert(false);
+        setIsLoading(false);
         return;
       }
 
@@ -176,6 +212,7 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = svg;
         setError("");
         setCanInsert(true);
+        setIsLoading(false);
       } catch (err) {
         if (!isActive) {
           return;
@@ -187,13 +224,24 @@ const MermaidEditor = () => {
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setCanInsert(false);
+        setIsLoading(false);
       }
     };
 
-    renderDiagram();
+    // Debounce rendering to improve performance
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      renderDiagram();
+    }, 300);
 
     return () => {
       isActive = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
   }, [code, theme]);
 
@@ -211,10 +259,13 @@ const MermaidEditor = () => {
     }
 
     try {
+      setError(""); // Clear any previous errors
       const svgContent = previewRef.current.innerHTML;
       await insertDiagram(svgContent, code);
     } catch (err) {
-      setError("Failed to insert diagram into Word.");
+      console.error("Insert diagram error:", err);
+      const errorMessage = err?.message || "Failed to insert diagram into Word.";
+      setError(errorMessage);
     }
   };
 
@@ -261,7 +312,13 @@ const MermaidEditor = () => {
             </Dropdown>
           </div>
           <div className={styles.previewContainer}>
-            <div ref={previewRef} className={styles.previewContent} />
+            {isLoading ? (
+              <div className={styles.loading}>
+                <Text>Loading preview...</Text>
+              </div>
+            ) : (
+              <div ref={previewRef} className={styles.previewContent} />
+            )}
           </div>
         </div>
       </div>

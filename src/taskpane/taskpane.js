@@ -1,4 +1,4 @@
-/* global Word console, DOMParser, document, Image, Blob, URL */
+/* global Word console, DOMParser, document, Image, Blob, URL, window */
 
 const WORD_PAGE_WIDTH_INCHES = 6;
 const DPI = 96;
@@ -23,17 +23,50 @@ function getSvgDimensions(svgString) {
     const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
     const svgElement = svgDoc.documentElement;
 
-    const width =
-      parseFloat(svgElement.getAttribute("width")) ||
-      parseFloat(svgElement.getAttribute("viewBox")?.split(" ")[2]) ||
-      800;
-    const height =
-      parseFloat(svgElement.getAttribute("height")) ||
-      parseFloat(svgElement.getAttribute("viewBox")?.split(" ")[3]) ||
-      600;
+    // Try to get dimensions from width/height attributes first
+    let width = parseFloat(svgElement.getAttribute("width"));
+    let height = parseFloat(svgElement.getAttribute("height"));
 
-    return { width, height };
-  } catch {
+    // If not found, try viewBox
+    if (!width || !height) {
+      const viewBox = svgElement.getAttribute("viewBox");
+      if (viewBox) {
+        const viewBoxValues = viewBox.split(" ").map(parseFloat);
+        if (viewBoxValues.length >= 4) {
+          width = width || viewBoxValues[2];
+          height = height || viewBoxValues[3];
+        }
+      }
+    }
+
+    // If still not found, try to get from the first child element (common for Mermaid)
+    if (!width || !height) {
+      const firstChild = svgElement.firstElementChild;
+      if (firstChild) {
+        width = width || parseFloat(firstChild.getAttribute("width"));
+        height = height || parseFloat(firstChild.getAttribute("height"));
+
+        // Try viewBox from first child
+        if (!width || !height) {
+          const childViewBox = firstChild.getAttribute("viewBox");
+          if (childViewBox) {
+            const childViewBoxValues = childViewBox.split(" ").map(parseFloat);
+            if (childViewBoxValues.length >= 4) {
+              width = width || childViewBoxValues[2];
+              height = height || childViewBoxValues[3];
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback dimensions with better aspect ratios for different diagram types
+    const fallbackWidth = width || 800;
+    const fallbackHeight = height || 600;
+
+    return { width: fallbackWidth, height: fallbackHeight };
+  } catch (error) {
+    console.log("Error getting SVG dimensions:", error);
     return { width: 800, height: 600 };
   }
 }
@@ -74,15 +107,31 @@ async function svgToBase64Png(svgContent) {
             svgHeight
           );
 
-          canvas.width = scaledWidth;
-          canvas.height = scaledHeight;
+          // Set canvas dimensions with device pixel ratio for better quality
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = scaledWidth * dpr;
+          canvas.height = scaledHeight * dpr;
 
+          // Scale the context to match device pixel ratio
+          ctx.scale(dpr, dpr);
+
+          // Set canvas CSS dimensions
+          canvas.style.width = scaledWidth + "px";
+          canvas.style.height = scaledHeight + "px";
+
+          // Fill white background
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, scaledWidth, scaledHeight);
 
+          // Enable image smoothing for better quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
+          // Draw the image
           ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-          const pngBase64 = canvas.toDataURL("image/png").split(",")[1];
+          // Use higher quality PNG
+          const pngBase64 = canvas.toDataURL("image/png", 1.0).split(",")[1];
 
           // Clean up the object URL
           if (objectUrl) {
@@ -105,7 +154,13 @@ async function svgToBase64Png(svgContent) {
         reject(new Error("Failed to load SVG image"));
       };
 
-      const svgBlob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+      // Fix SVG content to ensure proper namespace and dimensions
+      let fixedSvgContent = svgContent;
+      if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
+        fixedSvgContent = svgContent.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+
+      const svgBlob = new Blob([fixedSvgContent], { type: "image/svg+xml;charset=utf-8" });
       objectUrl = URL.createObjectURL(svgBlob);
       img.src = objectUrl;
     } catch (err) {
@@ -120,7 +175,14 @@ async function svgToBase64Png(svgContent) {
 export async function insertDiagram(svgContent, mermaidCode) {
   // Insert diagram as PNG with proper scaling for Word document
   try {
+    console.log("Starting diagram insertion...");
+    console.log("SVG content length:", svgContent.length);
+
+    const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
+    console.log("SVG dimensions:", { svgWidth, svgHeight });
+
     const pngBase64 = await svgToBase64Png(svgContent);
+    console.log("PNG conversion successful, base64 length:", pngBase64.length);
 
     await Word.run(async (context) => {
       let body = context.document.body;
@@ -131,19 +193,21 @@ export async function insertDiagram(svgContent, mermaidCode) {
       image.altTextDescription = mermaidCode;
 
       // Set width to max Word page width while maintaining aspect ratio
-      const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
       const { width: scaledWidth, height: scaledHeight } = calculateScaledDimensions(
         svgWidth,
         svgHeight
       );
 
+      console.log("Scaled dimensions for Word:", { scaledWidth, scaledHeight });
+
       image.width = scaledWidth;
       image.height = scaledHeight;
 
       await context.sync();
+      console.log("Diagram successfully inserted into Word");
     });
   } catch (error) {
-    console.log("Error: " + error);
-    throw error;
+    console.error("Error inserting diagram:", error);
+    throw new Error(`Failed to insert diagram: ${error.message || error}`);
   }
 }
