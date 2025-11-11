@@ -3,7 +3,7 @@ import mermaid from "mermaid";
 import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import { mermaidLanguage } from "codemirror-lang-mermaid";
-import { insertDiagram } from "../taskpane";
+import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 
 const DEFAULT_DIAGRAM = `flowchart LR
     A[Hard] -->|Text| B(Round)
@@ -111,70 +111,78 @@ const MermaidEditor = () => {
   const [canInsert, setCanInsert] = React.useState(false);
   const [theme, setTheme] = React.useState("default");
   const [isLoading, setIsLoading] = React.useState(true);
+  const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
+  const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const previewRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
   const debounceTimerRef = React.useRef(null);
 
   React.useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      suppressErrorRendering: true,
-      theme: theme,
-      fontFamily: "Arial, sans-serif",
-      fontSize: 16,
-      flowchart: {
-        useMaxWidth: false,
-        htmlLabels: true,
-        curve: "basis",
-        padding: 20
-      },
-      sequence: {
-        useMaxWidth: false,
-        wrap: true,
-        boxMargin: 10,
-        boxTextMargin: 5,
-        noteMargin: 10,
-        messageMargin: 35
-      },
-      gantt: {
-        useMaxWidth: false,
-        titleTopMargin: 25,
-        barHeight: 20,
-        fontSize: 14,
-        sectionFontSize: 14,
-        gridLineStartPadding: 35,
-        gridLineEndPadding: 35,
-        barGap: 4,
-        topPadding: 50,
-        leftPadding: 75,
-        rightPadding: 75,
-        bottomPadding: 50
-      },
-      classDiagram: {
-        useMaxWidth: false,
-        padding: 20
-      },
-      stateDiagram: {
-        useMaxWidth: false,
-        padding: 20
-      },
-      pie: {
-        useMaxWidth: false,
-        textPosition: 0.75,
-        pieStrokeWidth: 2,
-        pieOuterStrokeWidth: 2,
-        pieInnerStrokeWidth: 2
-      },
-      journey: {
-        useMaxWidth: false,
-        padding: 20,
-        boxMargin: 10,
-        boxTextMargin: 5,
-        leftMargin: 100,
-        rightMargin: 100
-      }
-    });
+    console.log("Initializing Mermaid with theme:", theme);
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        suppressErrorRendering: true,
+        theme: theme,
+        fontFamily: "Arial, sans-serif",
+        fontSize: 16,
+        flowchart: {
+          useMaxWidth: false,
+          htmlLabels: true,
+          curve: "basis",
+          padding: 20
+        },
+        sequence: {
+          useMaxWidth: false,
+          wrap: true,
+          boxMargin: 10,
+          boxTextMargin: 5,
+          noteMargin: 10,
+          messageMargin: 35
+        },
+        gantt: {
+          useMaxWidth: false,
+          titleTopMargin: 25,
+          barHeight: 20,
+          fontSize: 14,
+          sectionFontSize: 14,
+          gridLineStartPadding: 35,
+          gridLineEndPadding: 35,
+          barGap: 4,
+          topPadding: 50,
+          leftPadding: 75,
+          rightPadding: 75,
+          bottomPadding: 50
+        },
+        classDiagram: {
+          useMaxWidth: false,
+          padding: 20
+        },
+        stateDiagram: {
+          useMaxWidth: false,
+          padding: 20
+        },
+        pie: {
+          useMaxWidth: false,
+          textPosition: 0.75,
+          pieStrokeWidth: 2,
+          pieOuterStrokeWidth: 2,
+          pieInnerStrokeWidth: 2
+        },
+        journey: {
+          useMaxWidth: false,
+          padding: 20,
+          boxMargin: 10,
+          boxTextMargin: 5,
+          leftMargin: 100,
+          rightMargin: 100
+        }
+      });
+      console.log("Mermaid initialized successfully");
+    } catch (error) {
+      console.error("Error initializing Mermaid:", error);
+    }
   }, [theme]);
 
   React.useEffect(() => {
@@ -188,12 +196,15 @@ const MermaidEditor = () => {
       setIsLoading(true);
 
       try {
+        // First validate the Mermaid syntax
         await mermaid.parse(code);
+        console.log("Mermaid code parsed successfully");
       } catch (err) {
         if (!isActive) {
           return;
         }
 
+        console.error("Mermaid parse error:", err);
         previewRef.current.innerHTML = "";
         setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
         setCanInsert(false);
@@ -203,7 +214,9 @@ const MermaidEditor = () => {
 
       try {
         const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
+        console.log("Rendering Mermaid diagram with ID:", renderId);
         const { svg } = await mermaid.render(renderId, code);
+        console.log("Mermaid diagram rendered successfully, SVG length:", svg.length);
 
         if (!isActive || !previewRef.current) {
           return;
@@ -218,6 +231,7 @@ const MermaidEditor = () => {
           return;
         }
 
+        console.error("Mermaid render error:", err);
         if (previewRef.current) {
           previewRef.current.innerHTML = "";
         }
@@ -245,12 +259,52 @@ const MermaidEditor = () => {
     };
   }, [code, theme]);
 
+  // Check for selected images when component mounts or when selection might change
+  React.useEffect(() => {
+    const checkSelectedImage = async () => {
+      try {
+        const altText = await getSelectedImageAltText();
+        if (altText && (altText.includes("flowchart") || altText.includes("graph") || 
+            altText.includes("sequenceDiagram") || altText.includes("classDiagram") ||
+            altText.includes("stateDiagram") || altText.includes("gantt") ||
+            altText.includes("pie") || altText.includes("journey"))) {
+          setHasSelectedImage(true);
+          setSelectedImageCode(altText);
+        } else {
+          setHasSelectedImage(false);
+          setSelectedImageCode("");
+        }
+      } catch (error) {
+        // If there's no selection or it's not a Mermaid image, reset state
+        setHasSelectedImage(false);
+        setSelectedImageCode("");
+      }
+    };
+
+    // Check immediately
+    checkSelectedImage();
+
+    // Set up a periodic check (every 2 seconds) to detect selection changes
+    const intervalId = setInterval(checkSelectedImage, 2000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
   const handleCodeChange = (newCode) => {
     setCode(newCode);
   };
 
   const handleThemeChange = (event, data) => {
     setTheme(data.optionValue || "default");
+  };
+
+  const handleEditDiagram = () => {
+    if (selectedImageCode) {
+      setCode(selectedImageCode);
+      setError(""); // Clear any previous errors
+    }
   };
 
   const handleInsertDiagram = async () => {
@@ -276,7 +330,7 @@ const MermaidEditor = () => {
           Mermaid diagram editor
         </Text>
         <p className={styles.description}>
-          Update the Mermaid definition on the left with syntax highlighting and autocomplete. The diagram preview updates instantly on the right. All diagram types are supported.
+          Update the Mermaid definition on the left with syntax highlighting and autocomplete. The diagram preview updates instantly on the right. All diagram types are supported. {hasSelectedImage && "A Mermaid diagram is selected - click 'Edit Selected' to modify it."}
         </p>
       </div>
       <div className={styles.editorPreview}>
@@ -322,7 +376,15 @@ const MermaidEditor = () => {
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "8px" }}>
+        {hasSelectedImage && (
+          <Button 
+            appearance="secondary" 
+            onClick={handleEditDiagram}
+          >
+            Edit Selected
+          </Button>
+        )}
         <Button 
           appearance="primary" 
           onClick={handleInsertDiagram}
