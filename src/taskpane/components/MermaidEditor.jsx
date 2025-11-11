@@ -122,76 +122,79 @@ const MermaidEditor = () => {
   const renderIndexRef = React.useRef(0);
   const debounceTimerRef = React.useRef(null);
 
+  // Initialize Mermaid configuration once
+  const mermaidConfig = {
+    startOnLoad: false,
+    securityLevel: "strict",
+    suppressErrorRendering: true,
+    theme: theme,
+    fontFamily: "Arial, sans-serif",
+    fontSize: 16,
+    flowchart: {
+      useMaxWidth: false,
+      htmlLabels: true,
+      curve: "basis",
+      padding: 20
+    },
+    sequence: {
+      useMaxWidth: false,
+      wrap: true,
+      boxMargin: 10,
+      boxTextMargin: 5,
+      noteMargin: 10,
+      messageMargin: 35
+    },
+    gantt: {
+      useMaxWidth: true,
+      titleTopMargin: 25,
+      barHeight: 24,
+      fontSize: 14,
+      sectionFontSize: 14,
+      gridLineStartPadding: 35,
+      gridLineEndPadding: 35,
+      barGap: 6,
+      topPadding: 40,
+      leftPadding: 60,
+      rightPadding: 60,
+      bottomPadding: 40
+    },
+    classDiagram: {
+      useMaxWidth: false,
+      padding: 20
+    },
+    state: {
+      useMaxWidth: false,
+      padding: 20
+    },
+    stateDiagram: {
+      useMaxWidth: false,
+      padding: 20
+    },
+    stateDiagramV2: {
+      useMaxWidth: true,
+      padding: 20
+    },
+    pie: {
+      useMaxWidth: false,
+      textPosition: 0.75,
+      pieStrokeWidth: 2,
+      pieOuterStrokeWidth: 2,
+      pieInnerStrokeWidth: 2
+    },
+    journey: {
+      useMaxWidth: false,
+      padding: 20,
+      boxMargin: 10,
+      boxTextMargin: 5,
+      leftMargin: 100,
+      rightMargin: 100
+    }
+  };
+
   React.useEffect(() => {
     console.log("Initializing Mermaid with theme:", theme);
     try {
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        suppressErrorRendering: true,
-        theme: theme,
-        fontFamily: "Arial, sans-serif",
-        fontSize: 16,
-        flowchart: {
-          useMaxWidth: false,
-          htmlLabels: true,
-          curve: "basis",
-          padding: 20
-        },
-        sequence: {
-          useMaxWidth: false,
-          wrap: true,
-          boxMargin: 10,
-          boxTextMargin: 5,
-          noteMargin: 10,
-          messageMargin: 35
-        },
-        gantt: {
-          useMaxWidth: true,
-          titleTopMargin: 25,
-          barHeight: 24,
-          fontSize: 14,
-          sectionFontSize: 14,
-          gridLineStartPadding: 35,
-          gridLineEndPadding: 35,
-          barGap: 6,
-          topPadding: 40,
-          leftPadding: 60,
-          rightPadding: 60,
-          bottomPadding: 40
-        },
-        classDiagram: {
-          useMaxWidth: false,
-          padding: 20
-        },
-        state: {
-          useMaxWidth: false,
-          padding: 20
-        },
-        stateDiagram: {
-          useMaxWidth: false,
-          padding: 20
-        },
-        stateDiagramV2: {
-          useMaxWidth: false,
-          padding: 20
-        },
-        pie: {
-          useMaxWidth: false,
-          textPosition: 0.75,
-          pieStrokeWidth: 2,
-          pieOuterStrokeWidth: 2,
-          pieInnerStrokeWidth: 2
-        },
-        journey: {
-          useMaxWidth: false,
-          padding: 20,
-          boxMargin: 10,
-          boxTextMargin: 5,
-          leftMargin: 100,
-          rightMargin: 100
-        }
-      });
+      mermaid.initialize(mermaidConfig);
       console.log("Mermaid initialized successfully");
     } catch (error) {
       console.error("Error initializing Mermaid:", error);
@@ -257,7 +260,7 @@ const MermaidEditor = () => {
     
     debounceTimerRef.current = setTimeout(() => {
       renderDiagram();
-    }, 300);
+    }, 200);
 
     return () => {
       isActive = false;
@@ -290,8 +293,8 @@ const MermaidEditor = () => {
     // Check immediately
     checkSelectedImage();
 
-    // Set up a periodic check (every 2 seconds) to detect selection changes
-    const intervalId = setInterval(checkSelectedImage, 2000);
+    // Set up a periodic check (every 3 seconds) to detect selection changes
+    const intervalId = setInterval(checkSelectedImage, 3000);
 
     return () => {
       clearInterval(intervalId);
@@ -377,14 +380,13 @@ const MermaidEditor = () => {
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "8px" }}>
-        {hasSelectedImage && (
-          <Button 
-            appearance="secondary" 
-            onClick={handleEditDiagram}
-          >
-            Edit Selected
-          </Button>
-        )}
+        <Button 
+          appearance="secondary" 
+          onClick={handleEditDiagram}
+          disabled={!hasSelectedImage}
+        >
+          Edit Selected
+        </Button>
         <Button 
           appearance="primary" 
           onClick={handleInsertDiagram}
