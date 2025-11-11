@@ -32,6 +32,7 @@
     "@fluentui/react-components": "^9.55.1",
     "@fluentui/react-icons": "^2.0.264",
     "@uiw/react-codemirror": "^4.25.3",
+    "codemirror-lang-mermaid": "^0.5.0",
     "core-js": "^3.36.0",
     "es6-promise": "^4.2.8",
     "html2canvas": "^1.4.1",
