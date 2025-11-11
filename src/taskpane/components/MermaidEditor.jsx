@@ -5,56 +5,11 @@ import CodeMirror from "@uiw/react-codemirror";
 import { mermaidLanguage } from "codemirror-lang-mermaid";
 import { insertDiagram } from "../taskpane";
 
-const DEFAULT_DIAGRAM = `sequenceDiagram
-    participant Alice
-    participant Bob
-    Alice->>John: Hello John, how are you?
-    loop Healthcheck
-        John->>John: Fight against hypochondria
-    end
-    Note right of John: Rational thoughts <br/>prevail!
-    John-->>Alice: Great!
-    John->>Bob: How about you?
-    Bob-->>John: Jolly good!
-
-%% Try other diagram types:
-%% gantt
-%%     title A Gantt Diagram
-%%     dateFormat  YYYY-MM-DD
-%%     section Section
-%%     A task           :a1, 2014-01-01, 30d
-%%     Another task     :after a1  , 20d
-%%
-%% classDiagram
-%%     Class01 <|-- AveryLongClass : Cool
-%%     Class03 *-- Class04
-%%     Class05 o-- Class06
-%%     Class07 .. Class08
-%%     Class09 --> C2 : Where am i?
-%%
-%% stateDiagram-v2
-%%     [*] --> Still
-%%     Still --> [*]
-%%     Still --> Moving
-%%     Moving --> Still
-%%     Moving --> Crash
-%%     Crash --> [*]
-%%
-%% pie
-%%     title What is your favorite pet?
-%%     "Dogs" : 386
-%%     "Cats" : 85
-%%     "Rats" : 15
-%%
-%% journey
-%%     title My working day
-%%     section Go to work
-%%       Make tea: 5: Me
-%%       Go upstairs: 3: Me
-%%       Do work: 1: Me, Cat
-%%     section Go home
-%%       Go downstairs: 5: Me
-%%       Sit down: 5: Me
+const DEFAULT_DIAGRAM = `flowchart LR
+    A[Hard] -->|Text| B(Round)
+    B --> C{Decision}
+    C -->|One| D[Result 1]
+    C -->|Two| E[Result 2]
 `;
 
 const MERMAID_THEMES = {
