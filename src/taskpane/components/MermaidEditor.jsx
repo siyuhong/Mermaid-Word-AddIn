@@ -110,7 +110,6 @@ const MermaidEditor = () => {
   const [error, setError] = React.useState("");
   const [canInsert, setCanInsert] = React.useState(false);
   const [theme, setTheme] = React.useState("default");
-  const [isLoading, setIsLoading] = React.useState(true);
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const previewRef = React.useRef(null);
@@ -193,8 +192,6 @@ const MermaidEditor = () => {
         return;
       }
 
-      setIsLoading(true);
-
       try {
         // First validate the Mermaid syntax
         await mermaid.parse(code);
@@ -208,7 +205,6 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = "";
         setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
         setCanInsert(false);
-        setIsLoading(false);
         return;
       }
 
@@ -225,7 +221,6 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = svg;
         setError("");
         setCanInsert(true);
-        setIsLoading(false);
       } catch (err) {
         if (!isActive) {
           return;
@@ -238,7 +233,6 @@ const MermaidEditor = () => {
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setCanInsert(false);
-        setIsLoading(false);
       }
     };
 
@@ -325,16 +319,9 @@ const MermaidEditor = () => {
 
   return (
     <section className={styles.root} aria-label="Mermaid editor">
-      <div>
-        <Text size="400" weight="semibold">
-          Mermaid diagram editor
-        </Text>
-        <p className={styles.description}>
-          Update the Mermaid definition on the left with syntax highlighting and autocomplete. The diagram preview updates instantly on the right. All diagram types are supported. {hasSelectedImage && "A Mermaid diagram is selected - click 'Edit Selected' to modify it."}
-        </p>
-      </div>
       <div className={styles.editorPreview}>
-        <Field className={styles.editorField} label="Mermaid code (with syntax highlighting)">
+        <Field className={styles.editorField}>
+          <Text size="300" weight="semibold">Mermaid Code</Text>
           <div className={styles.codeMirrorWrapper}>
             <CodeMirror
               value={code}
@@ -366,13 +353,7 @@ const MermaidEditor = () => {
             </Dropdown>
           </div>
           <div className={styles.previewContainer}>
-            {isLoading ? (
-              <div className={styles.loading}>
-                <Text>Loading preview...</Text>
-              </div>
-            ) : (
               <div ref={previewRef} className={styles.previewContent} />
-            )}
           </div>
         </div>
       </div>
