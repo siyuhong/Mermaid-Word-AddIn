@@ -1,6 +1,7 @@
 import * as React from "react";
 import mermaid from "mermaid";
-import { Field, Textarea, Text, Button, makeStyles, tokens } from "@fluentui/react-components";
+import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
+import CodeMirror from "@uiw/react-codemirror";
 import { insertDiagram } from "../taskpane";
 
 const DEFAULT_DIAGRAM = `sequenceDiagram
@@ -55,6 +56,20 @@ const DEFAULT_DIAGRAM = `sequenceDiagram
 %%       Sit down: 5: Me
 `;
 
+const MERMAID_THEMES = {
+  default: "default",
+  dark: "dark",
+  forest: "forest",
+  neutral: "neutral",
+};
+
+const CUSTOM_THEME = {
+  primary: "#0078d4",
+  secondary: "#50e6ff",
+  background: "#ffffff",
+  text: "#000000",
+};
+
 const useStyles = makeStyles({
   root: {
     display: "flex",
@@ -74,8 +89,20 @@ const useStyles = makeStyles({
   editorField: {
     flex: "1 1 320px",
   },
-  textarea: {
-    minHeight: "260px",
+  codeMirrorWrapper: {
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    overflow: "hidden",
+  },
+  previewHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "12px",
+    gap: "12px",
+  },
+  themeSelector: {
+    minWidth: "150px",
   },
   previewContainer: {
     flex: "1 1 320px",
@@ -120,6 +147,7 @@ const MermaidEditor = () => {
   const [code, setCode] = React.useState(DEFAULT_DIAGRAM);
   const [error, setError] = React.useState("");
   const [canInsert, setCanInsert] = React.useState(false);
+  const [theme, setTheme] = React.useState("default");
   const previewRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
 
@@ -128,8 +156,7 @@ const MermaidEditor = () => {
       startOnLoad: false,
       securityLevel: "strict",
       suppressErrorRendering: true,
-      // Enable all diagram types including those that were previously disabled
-      theme: "default",
+      theme: theme,
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
@@ -159,7 +186,7 @@ const MermaidEditor = () => {
         useMaxWidth: true
       }
     });
-  }, []);
+  }, [theme]);
 
   React.useEffect(() => {
     let isActive = true;
@@ -214,8 +241,12 @@ const MermaidEditor = () => {
     };
   }, [code]);
 
-  const handleCodeChange = (event) => {
-    setCode(event.target.value);
+  const handleCodeChange = (newCode) => {
+    setCode(newCode);
+  };
+
+  const handleThemeChange = (event, data) => {
+    setTheme(data.optionValue || "default");
   };
 
   const handleInsertDiagram = async () => {
@@ -238,15 +269,41 @@ const MermaidEditor = () => {
           Mermaid diagram editor
         </Text>
         <p className={styles.description}>
-          Update the Mermaid definition on the left to instantly refresh the diagram preview on the right. All diagram types are now supported, including sequence diagrams, Gantt charts, class diagrams, state diagrams, pie charts, and journey diagrams.
+          Update the Mermaid definition on the left with syntax highlighting and autocomplete. The diagram preview updates instantly on the right. All diagram types are supported.
         </p>
       </div>
       <div className={styles.editorPreview}>
-        <Field className={styles.editorField} label="Mermaid code">
-          <Textarea value={code} onChange={handleCodeChange} appearance="outline" className={styles.textarea} />
+        <Field className={styles.editorField} label="Mermaid code (with syntax highlighting)">
+          <div className={styles.codeMirrorWrapper}>
+            <CodeMirror
+              value={code}
+              onChange={handleCodeChange}
+              height="260px"
+              options={{
+                lineNumbers: true,
+                lineWrapping: true,
+              }}
+            />
+          </div>
         </Field>
-        <div className={styles.previewContainer}>
-          <div ref={previewRef} className={styles.previewContent} />
+        <div>
+          <div className={styles.previewHeader}>
+            <Text size="300" weight="semibold">Preview</Text>
+            <Dropdown
+              className={styles.themeSelector}
+              value={theme}
+              onOptionSelect={handleThemeChange}
+              aria-label="Mermaid theme"
+            >
+              <Option value="default">Default</Option>
+              <Option value="dark">Dark</Option>
+              <Option value="forest">Forest</Option>
+              <Option value="neutral">Neutral</Option>
+            </Dropdown>
+          </div>
+          <div className={styles.previewContainer}>
+            <div ref={previewRef} className={styles.previewContent} />
+          </div>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
