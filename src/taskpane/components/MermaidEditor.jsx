@@ -69,6 +69,22 @@ const getErrorMessage = (error, fallback) => {
   return fallback;
 };
 
+// List of unsupported diagram types that cause chunk loading errors
+const UNSUPPORTED_DIAGRAMS = [
+  "sequenceDiagram",
+  "gantt",
+  "classDiagram",
+  "stateDiagram",
+  "pie",
+  "journey",
+];
+
+// Check if the diagram code uses an unsupported diagram type
+const isUnsupportedDiagram = (code) => {
+  const trimmedCode = code.trim();
+  return UNSUPPORTED_DIAGRAMS.some((diagram) => trimmedCode.startsWith(diagram));
+};
+
 const MermaidEditor = () => {
   const styles = useStyles();
   const [code, setCode] = React.useState(DEFAULT_DIAGRAM);
@@ -80,6 +96,7 @@ const MermaidEditor = () => {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "strict",
+      suppressErrorRendering: true,
     });
   }, []);
 
@@ -88,6 +105,20 @@ const MermaidEditor = () => {
 
     const renderDiagram = async () => {
       if (!previewRef.current) {
+        return;
+      }
+
+      if (isUnsupportedDiagram(code)) {
+        if (!isActive) {
+          return;
+        }
+
+        previewRef.current.innerHTML = "";
+        const diagramType = code.trim().split(/[\s\n]/)[0];
+        setError(
+          `The diagram type "${diagramType}" is not supported. ` +
+            "Supported types include: flowchart, graph, erd, gitGraph, mindmap, xychart, sankey, timeline."
+        );
         return;
       }
 
