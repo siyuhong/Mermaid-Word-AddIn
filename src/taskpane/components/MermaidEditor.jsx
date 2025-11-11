@@ -2,7 +2,6 @@ import * as React from "react";
 import mermaid from "mermaid";
 import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
-import { mermaidLanguage } from "codemirror-lang-mermaid";
 import enhancedMermaidLanguage from "./enhancedMermaidLanguage";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 
@@ -93,11 +92,17 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
     padding: "16px",
-    minHeight: "300px",
-    overflow: "auto",
+    minHeight: "240px",
   },
   previewContent: {
     width: "100%",
+    overflow: "visible",
+    "& svg": {
+      display: "block",
+      width: "100%",
+      maxWidth: "100%",
+      height: "auto",
+    },
   },
   error: {
     color: tokens.colorPaletteRedForeground1,
@@ -169,18 +174,18 @@ const MermaidEditor = () => {
           messageMargin: 35
         },
         gantt: {
-          useMaxWidth: false,
+          useMaxWidth: true,
           titleTopMargin: 25,
-          barHeight: 20,
+          barHeight: 24,
           fontSize: 14,
           sectionFontSize: 14,
           gridLineStartPadding: 35,
           gridLineEndPadding: 35,
-          barGap: 4,
-          topPadding: 50,
-          leftPadding: 75,
-          rightPadding: 75,
-          bottomPadding: 50
+          barGap: 6,
+          topPadding: 40,
+          leftPadding: 60,
+          rightPadding: 60,
+          bottomPadding: 40
         },
         classDiagram: {
           useMaxWidth: false,
@@ -293,23 +298,19 @@ const MermaidEditor = () => {
   React.useEffect(() => {
     const checkSelectedImage = async () => {
       try {
-        const altText = await getSelectedImageAltText();
-        if (altText && (altText.includes("flowchart") || altText.includes("graph") || 
-            altText.includes("sequenceDiagram") || altText.includes("classDiagram") ||
-            altText.includes("stateDiagram") || altText.includes("stateDiagram-v2") ||
-            altText.includes("gantt") || altText.includes("pie") || altText.includes("journey") ||
-            altText.includes("gitgraph") || altText.includes("erDiagram") || altText.includes("mindmap") ||
-            altText.includes("timeline") || altText.includes("sankey") || altText.includes("block"))) {
+        const mermaidCode = await getSelectedImageAltText();
+        if (mermaidCode) {
+          const normalizedCode = mermaidCode.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
           setHasSelectedImage(true);
-          setSelectedImageCode(altText);
+          setSelectedImageCode((prev) => (prev === normalizedCode ? prev : normalizedCode));
         } else {
           setHasSelectedImage(false);
-          setSelectedImageCode("");
+          setSelectedImageCode((prev) => (prev ? "" : prev));
         }
       } catch (error) {
         // If there's no selection or it's not a Mermaid image, reset state
         setHasSelectedImage(false);
-        setSelectedImageCode("");
+        setSelectedImageCode((prev) => (prev ? "" : prev));
       }
     };
 

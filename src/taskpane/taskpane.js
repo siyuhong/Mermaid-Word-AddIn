@@ -1,8 +1,9 @@
-/* global Word console, DOMParser, document, Image, URL, window, btoa */
+/* global Word console, DOMParser, document, Image, window, btoa */
 
 const WORD_PAGE_WIDTH_INCHES = 6;
 const DPI = 96;
 const WORD_MAX_WIDTH_PX = WORD_PAGE_WIDTH_INCHES * DPI;
+const PNG_EXPORT_SCALE = 2;
 
 export async function insertText(text) {
   // Write text to the document.
@@ -60,9 +61,64 @@ function getSvgDimensions(svgString) {
       }
     }
 
-    // Fallback dimensions with better aspect ratios for different diagram types
-    const fallbackWidth = width || 800;
-    const fallbackHeight = height || 600;
+    if (typeof document !== "undefined" && document.body) {
+      let tempContainer = null;
+      try {
+        tempContainer = document.createElement("div");
+        tempContainer.style.position = "fixed";
+        tempContainer.style.pointerEvents = "none";
+        tempContainer.style.opacity = "0";
+        tempContainer.style.top = "-10000px";
+        tempContainer.style.left = "-10000px";
+        tempContainer.innerHTML = svgString;
+        document.body.appendChild(tempContainer);
+
+        const tempSvg = tempContainer.querySelector("svg");
+        if (tempSvg) {
+          let measuredWidth = null;
+          let measuredHeight = null;
+
+          try {
+            const bbox = tempSvg.getBBox();
+            if (bbox && bbox.width && bbox.height) {
+              measuredWidth = bbox.width;
+              measuredHeight = bbox.height;
+            }
+          } catch {
+            // Ignore measurement errors from getBBox and fall back to other strategies
+          }
+
+          if (!measuredWidth || !measuredHeight) {
+            const rect = tempSvg.getBoundingClientRect();
+            if (rect && rect.width && rect.height) {
+              measuredWidth = measuredWidth || rect.width;
+              measuredHeight = measuredHeight || rect.height;
+            }
+          }
+
+          if (tempSvg.viewBox && tempSvg.viewBox.baseVal) {
+            measuredWidth = measuredWidth || tempSvg.viewBox.baseVal.width;
+            measuredHeight = measuredHeight || tempSvg.viewBox.baseVal.height;
+          }
+
+          if (measuredWidth && measuredWidth > 0) {
+            width = measuredWidth;
+          }
+          if (measuredHeight && measuredHeight > 0) {
+            height = measuredHeight;
+          }
+        }
+      } catch (measurementError) {
+        console.log("Error measuring SVG dimensions via DOM:", measurementError);
+      } finally {
+        if (tempContainer && tempContainer.parentNode) {
+          tempContainer.parentNode.removeChild(tempContainer);
+        }
+      }
+    }
+
+    const fallbackWidth = width && !Number.isNaN(width) ? width : 800;
+    const fallbackHeight = height && !Number.isNaN(height) ? height : 600;
 
     return { width: fallbackWidth, height: fallbackHeight };
   } catch (error) {
@@ -72,23 +128,39 @@ function getSvgDimensions(svgString) {
 }
 
 function calculateScaledDimensions(originalWidth, originalHeight) {
-  // Maintain aspect ratio
-  const aspectRatio = originalHeight / originalWidth;
+  const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
+  const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
+
+  const fallbackWidth = WORD_MAX_WIDTH_PX;
+  const fallbackHeight = WORD_MAX_WIDTH_PX * 0.75;
+
+  const width = hasValidWidth ? originalWidth : fallbackWidth;
+
+  let height;
+  if (hasValidHeight) {
+    height = originalHeight;
+  } else if (hasValidWidth) {
+    height = (originalWidth * fallbackHeight) / fallbackWidth;
+  } else {
+    height = fallbackHeight;
+  }
+
+  // Maintain aspect ratio with safe values
+  const aspectRatio = height / width || 1;
 
   // Only scale down if the image is wider than the max width
-  if (originalWidth > WORD_MAX_WIDTH_PX) {
+  if (width > WORD_MAX_WIDTH_PX) {
     const scaledWidth = WORD_MAX_WIDTH_PX;
     const scaledHeight = scaledWidth * aspectRatio;
     return { width: scaledWidth, height: scaledHeight };
   }
 
   // If the image is smaller than max width, keep original dimensions
-  return { width: originalWidth, height: originalHeight };
+  return { width, height };
 }
 
 async function svgToBase64Png(svgContent) {
   return new Promise((resolve, reject) => {
-    let objectUrl = null;
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -111,13 +183,14 @@ async function svgToBase64Png(svgContent) {
             svgHeight
           );
 
-          // Set canvas dimensions with device pixel ratio for better quality
-          const dpr = window.devicePixelRatio || 1;
-          canvas.width = scaledWidth * dpr;
-          canvas.height = scaledHeight * dpr;
+          // Set canvas dimensions with additional scale for better quality exports
+          const devicePixelRatio = window.devicePixelRatio || 1;
+          const exportScale = Math.max(devicePixelRatio, PNG_EXPORT_SCALE);
+          canvas.width = scaledWidth * exportScale;
+          canvas.height = scaledHeight * exportScale;
 
-          // Scale the context to match device pixel ratio
-          ctx.scale(dpr, dpr);
+          // Scale the context to match the export scale
+          ctx.scale(exportScale, exportScale);
 
           // Set canvas CSS dimensions
           canvas.style.width = scaledWidth + "px";
@@ -137,24 +210,13 @@ async function svgToBase64Png(svgContent) {
           // Use higher quality PNG
           const pngBase64 = canvas.toDataURL("image/png", 1.0).split(",")[1];
 
-          // Clean up the object URL
-          if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-          }
-
           resolve(pngBase64);
         } catch (err) {
-          if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-          }
           reject(err);
         }
       };
 
       img.onerror = () => {
-        if (objectUrl) {
-          URL.revokeObjectURL(objectUrl);
-        }
         reject(new Error("Failed to load SVG image"));
       };
 
@@ -175,9 +237,6 @@ async function svgToBase64Png(svgContent) {
 
       img.src = svgDataUrl;
     } catch (err) {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
       reject(err);
     }
   });
@@ -186,31 +245,30 @@ async function svgToBase64Png(svgContent) {
 export async function getSelectedImageAltText() {
   try {
     return await Word.run(async (context) => {
-      // Get all inline pictures in the document
-      const body = context.document.body;
-      const inlinePictures = body.inlinePictures;
+      const selection = context.document.getSelection();
+      context.load(selection, "inlinePictures");
+
+      await context.sync();
+
+      const inlinePictures = selection.inlinePictures;
       context.load(inlinePictures, "items");
 
       await context.sync();
 
-      // Load all picture properties at once to avoid multiple sync calls
-      const picturesToLoad = [];
-      for (let i = 0; i < inlinePictures.items.length; i++) {
-        const picture = inlinePictures.items[i];
-        context.load(picture, "altTextTitle, altTextDescription, parentContentControl");
-        picturesToLoad.push(picture);
+      if (!inlinePictures || inlinePictures.items.length === 0) {
+        return null;
       }
+
+      const selectedPicture = inlinePictures.items[0];
+      context.load(selectedPicture, "altTextTitle, altTextDescription");
 
       await context.sync();
 
-      // Check each picture to see if it's a Mermaid diagram
-      for (const picture of picturesToLoad) {
-        // Check if this is a Mermaid diagram
-        if (picture.altTextTitle === "Mermaid Diagram") {
-          // Simple check: if we can find a Mermaid diagram, assume it might be the one the user wants to edit
-          // In a real implementation, you'd need more sophisticated selection detection
-          return picture.altTextDescription || "";
-        }
+      if (
+        selectedPicture.altTextTitle === "Mermaid Diagram" &&
+        selectedPicture.altTextDescription
+      ) {
+        return selectedPicture.altTextDescription;
       }
 
       return null;
