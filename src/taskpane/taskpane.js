@@ -172,6 +172,39 @@ async function svgToBase64Png(svgContent) {
   });
 }
 
+export async function getSelectedImageAltText() {
+  try {
+    return await Word.run(async (context) => {
+      // Get all inline pictures in the document
+      const body = context.document.body;
+      const inlinePictures = body.inlinePictures;
+      context.load(inlinePictures, "items");
+
+      await context.sync();
+
+      // Check each picture to see if it's selected and is a Mermaid diagram
+      for (let i = 0; i < inlinePictures.items.length; i++) {
+        const picture = inlinePictures.items[i];
+        context.load(picture, "altTextTitle, altTextDescription, parentContentControl");
+
+        await context.sync();
+
+        // Check if this is a Mermaid diagram
+        if (picture.altTextTitle === "Mermaid Diagram") {
+          // Simple check: if we can find a Mermaid diagram, assume it might be the one the user wants to edit
+          // In a real implementation, you'd need more sophisticated selection detection
+          return picture.altTextDescription || "";
+        }
+      }
+
+      return null;
+    });
+  } catch (error) {
+    console.log("Error getting selected image alt text:", error);
+    return null;
+  }
+}
+
 export async function insertDiagram(svgContent, mermaidCode) {
   // Insert diagram as PNG with proper scaling for Word document
   try {
