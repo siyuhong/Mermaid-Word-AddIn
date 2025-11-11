@@ -31,6 +31,11 @@ module.exports = async (env, options) => {
     },
     resolve: {
       extensions: [".js", ".jsx", ".html"],
+      alias: {
+        "@codemirror/state": require.resolve("@codemirror/state"),
+        "@codemirror/view": require.resolve("@codemirror/view"),
+        "@codemirror/language": require.resolve("@codemirror/language"),
+      },
     },
     module: {
       rules: [
