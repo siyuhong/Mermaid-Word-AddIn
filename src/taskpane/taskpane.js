@@ -3,6 +3,7 @@
 const WORD_PAGE_WIDTH_INCHES = 6;
 const DPI = 96;
 const WORD_MAX_WIDTH_PX = WORD_PAGE_WIDTH_INCHES * DPI;
+const WORD_TARGET_WIDTH_PX = WORD_MAX_WIDTH_PX * 0.8; // 80% of max width for better fit
 const PNG_EXPORT_SCALE = 2;
 
 export async function insertText(text) {
@@ -131,8 +132,8 @@ function calculateScaledDimensions(originalWidth, originalHeight) {
   const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
   const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
 
-  const fallbackWidth = WORD_MAX_WIDTH_PX;
-  const fallbackHeight = WORD_MAX_WIDTH_PX * 0.75;
+  const fallbackWidth = WORD_TARGET_WIDTH_PX;
+  const fallbackHeight = WORD_TARGET_WIDTH_PX * 0.75;
 
   const width = hasValidWidth ? originalWidth : fallbackWidth;
 
@@ -148,14 +149,21 @@ function calculateScaledDimensions(originalWidth, originalHeight) {
   // Maintain aspect ratio with safe values
   const aspectRatio = height / width || 1;
 
-  // Only scale down if the image is wider than the max width
-  if (width > WORD_MAX_WIDTH_PX) {
-    const scaledWidth = WORD_MAX_WIDTH_PX;
+  // Scale down if the image is wider than the target width
+  if (width > WORD_TARGET_WIDTH_PX) {
+    const scaledWidth = WORD_TARGET_WIDTH_PX;
     const scaledHeight = scaledWidth * aspectRatio;
     return { width: scaledWidth, height: scaledHeight };
   }
 
-  // If the image is smaller than max width, keep original dimensions
+  // If the image is smaller than target width but still larger than a reasonable minimum, scale it down slightly
+  if (width > WORD_TARGET_WIDTH_PX * 0.6) {
+    const scaledWidth = WORD_TARGET_WIDTH_PX;
+    const scaledHeight = scaledWidth * aspectRatio;
+    return { width: scaledWidth, height: scaledHeight };
+  }
+
+  // If the image is much smaller, keep original dimensions
   return { width, height };
 }
 
@@ -246,21 +254,17 @@ export async function getSelectedImageAltText() {
   try {
     return await Word.run(async (context) => {
       const selection = context.document.getSelection();
-      context.load(selection, "inlinePictures");
+      selection.load("inlinePictures");
 
       await context.sync();
 
       const inlinePictures = selection.inlinePictures;
-      context.load(inlinePictures, "items");
-
-      await context.sync();
-
       if (!inlinePictures || inlinePictures.items.length === 0) {
         return null;
       }
 
       const selectedPicture = inlinePictures.items[0];
-      context.load(selectedPicture, "altTextTitle, altTextDescription");
+      selectedPicture.load("altTextTitle, altTextDescription");
 
       await context.sync();
 
@@ -285,11 +289,35 @@ export async function insertDiagram(svgContent, mermaidCode) {
     console.log("Starting diagram insertion...");
     console.log("SVG content length:", svgContent.length);
 
+    // Validate SVG content
+    if (!svgContent || typeof svgContent !== "string") {
+      throw new Error("Invalid SVG content provided");
+    }
+
+    if (!svgContent.includes("<svg")) {
+      throw new Error("SVG content does not contain valid SVG markup");
+    }
+
     const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
     console.log("SVG dimensions:", { svgWidth, svgHeight });
 
+    // Validate dimensions
+    if (
+      !Number.isFinite(svgWidth) ||
+      !Number.isFinite(svgHeight) ||
+      svgWidth <= 0 ||
+      svgHeight <= 0
+    ) {
+      throw new Error(`Invalid SVG dimensions: ${svgWidth}x${svgHeight}`);
+    }
+
     const pngBase64 = await svgToBase64Png(svgContent);
     console.log("PNG conversion successful, base64 length:", pngBase64.length);
+
+    // Validate base64 output
+    if (!pngBase64 || typeof pngBase64 !== "string" || pngBase64.length === 0) {
+      throw new Error("Failed to convert SVG to PNG - invalid base64 output");
+    }
 
     await Word.run(async (context) => {
       let body = context.document.body;
@@ -307,14 +335,36 @@ export async function insertDiagram(svgContent, mermaidCode) {
 
       console.log("Scaled dimensions for Word:", { scaledWidth, scaledHeight });
 
-      image.width = scaledWidth;
-      image.height = scaledHeight;
+      // Validate scaled dimensions
+      if (
+        !Number.isFinite(scaledWidth) ||
+        !Number.isFinite(scaledHeight) ||
+        scaledWidth <= 0 ||
+        scaledHeight <= 0
+      ) {
+        throw new Error(`Invalid scaled dimensions: ${scaledWidth}x${scaledHeight}`);
+      }
+
+      image.width = Math.round(scaledWidth);
+      image.height = Math.round(scaledHeight);
 
       await context.sync();
       console.log("Diagram successfully inserted into Word");
     });
   } catch (error) {
     console.error("Error inserting diagram:", error);
-    throw new Error(`Failed to insert diagram: ${error.message || error}`);
+
+    // Provide more specific error messages for common issues
+    let errorMessage = `Failed to insert diagram: ${error.message || error}`;
+
+    if (error.message && error.message.includes("InvalidArgument")) {
+      errorMessage =
+        "Failed to insert diagram: Invalid argument. This may be caused by invalid SVG content or dimensions. Please check your Mermaid syntax.";
+    } else if (error.message && error.message.includes("base64")) {
+      errorMessage =
+        "Failed to insert diagram: Unable to convert SVG to PNG. Please try a simpler diagram.";
+    }
+
+    throw new Error(errorMessage);
   }
 }
