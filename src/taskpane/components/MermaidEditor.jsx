@@ -2,6 +2,7 @@ import * as React from "react";
 import mermaid from "mermaid";
 import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
+import { mermaidLanguage } from "codemirror-lang-mermaid";
 import { insertDiagram } from "../taskpane";
 
 const DEFAULT_DIAGRAM = `sequenceDiagram
@@ -239,7 +240,7 @@ const MermaidEditor = () => {
     return () => {
       isActive = false;
     };
-  }, [code]);
+  }, [code, theme]);
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
@@ -279,9 +280,12 @@ const MermaidEditor = () => {
               value={code}
               onChange={handleCodeChange}
               height="260px"
-              options={{
+              extensions={[mermaidLanguage]}
+              basicSetup={{
                 lineNumbers: true,
-                lineWrapping: true,
+                foldGutter: true,
+                highlightActiveLineGutter: true,
+                highlightActiveLine: true,
               }}
             />
           </div>

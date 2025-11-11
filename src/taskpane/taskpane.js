@@ -39,15 +39,23 @@ function getSvgDimensions(svgString) {
 }
 
 function calculateScaledDimensions(originalWidth, originalHeight) {
-  const ratio = originalHeight / originalWidth;
-  const scaledWidth = WORD_MAX_WIDTH_PX;
-  const scaledHeight = scaledWidth * ratio;
+  // Maintain aspect ratio
+  const aspectRatio = originalHeight / originalWidth;
 
-  return { width: scaledWidth, height: scaledHeight };
+  // Only scale down if the image is wider than the max width
+  if (originalWidth > WORD_MAX_WIDTH_PX) {
+    const scaledWidth = WORD_MAX_WIDTH_PX;
+    const scaledHeight = scaledWidth * aspectRatio;
+    return { width: scaledWidth, height: scaledHeight };
+  }
+
+  // If the image is smaller than max width, keep original dimensions
+  return { width: originalWidth, height: originalHeight };
 }
 
 async function svgToBase64Png(svgContent) {
   return new Promise((resolve, reject) => {
+    let objectUrl = null;
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -59,32 +67,51 @@ async function svgToBase64Png(svgContent) {
 
       const img = new Image();
       img.onload = () => {
-        const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
-        const { width: scaledWidth, height: scaledHeight } = calculateScaledDimensions(
-          svgWidth,
-          svgHeight
-        );
+        try {
+          const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
+          const { width: scaledWidth, height: scaledHeight } = calculateScaledDimensions(
+            svgWidth,
+            svgHeight
+          );
 
-        canvas.width = scaledWidth;
-        canvas.height = scaledHeight;
+          canvas.width = scaledWidth;
+          canvas.height = scaledHeight;
 
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, scaledWidth, scaledHeight);
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, scaledWidth, scaledHeight);
 
-        ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+          ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-        const pngBase64 = canvas.toDataURL("image/png").split(",")[1];
-        resolve(pngBase64);
+          const pngBase64 = canvas.toDataURL("image/png").split(",")[1];
+
+          // Clean up the object URL
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+          }
+
+          resolve(pngBase64);
+        } catch (err) {
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+          }
+          reject(err);
+        }
       };
 
       img.onerror = () => {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
         reject(new Error("Failed to load SVG image"));
       };
 
-      const svgBlob = new Blob([svgContent], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(svgBlob);
-      img.src = url;
+      const svgBlob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+      objectUrl = URL.createObjectURL(svgBlob);
+      img.src = objectUrl;
     } catch (err) {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
       reject(err);
     }
   });
