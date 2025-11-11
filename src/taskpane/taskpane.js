@@ -1,4 +1,4 @@
-/* global Word console, DOMParser, document, Image, Blob, URL, window */
+/* global Word console, DOMParser, document, Image, URL, window, btoa */
 
 const WORD_PAGE_WIDTH_INCHES = 6;
 const DPI = 96;
@@ -99,6 +99,10 @@ async function svgToBase64Png(svgContent) {
       }
 
       const img = new Image();
+
+      // Set crossOrigin to anonymous to prevent CORS issues
+      img.crossOrigin = "anonymous";
+
       img.onload = () => {
         try {
           const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
@@ -160,9 +164,16 @@ async function svgToBase64Png(svgContent) {
         fixedSvgContent = svgContent.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
       }
 
-      const svgBlob = new Blob([fixedSvgContent], { type: "image/svg+xml;charset=utf-8" });
-      objectUrl = URL.createObjectURL(svgBlob);
-      img.src = objectUrl;
+      // Remove any potential external references that could cause CORS issues
+      fixedSvgContent = fixedSvgContent.replace(/href="http[^"]*"/g, "");
+      fixedSvgContent = fixedSvgContent.replace(/xlink:href="http[^"]*"/g, "");
+      fixedSvgContent = fixedSvgContent.replace(/@import[^;]*;/g, "");
+
+      // Create a data URL directly from the SVG to avoid CORS issues
+      const svgBase64 = btoa(unescape(encodeURIComponent(fixedSvgContent)));
+      const svgDataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+
+      img.src = svgDataUrl;
     } catch (err) {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
@@ -182,13 +193,18 @@ export async function getSelectedImageAltText() {
 
       await context.sync();
 
-      // Check each picture to see if it's selected and is a Mermaid diagram
+      // Load all picture properties at once to avoid multiple sync calls
+      const picturesToLoad = [];
       for (let i = 0; i < inlinePictures.items.length; i++) {
         const picture = inlinePictures.items[i];
         context.load(picture, "altTextTitle, altTextDescription, parentContentControl");
+        picturesToLoad.push(picture);
+      }
 
-        await context.sync();
+      await context.sync();
 
+      // Check each picture to see if it's a Mermaid diagram
+      for (const picture of picturesToLoad) {
         // Check if this is a Mermaid diagram
         if (picture.altTextTitle === "Mermaid Diagram") {
           // Simple check: if we can find a Mermaid diagram, assume it might be the one the user wants to edit

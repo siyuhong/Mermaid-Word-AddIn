@@ -3,6 +3,7 @@ import mermaid from "mermaid";
 import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import { mermaidLanguage } from "codemirror-lang-mermaid";
+import enhancedMermaidLanguage from "./enhancedMermaidLanguage";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 
 const DEFAULT_DIAGRAM = `flowchart LR
@@ -10,6 +11,33 @@ const DEFAULT_DIAGRAM = `flowchart LR
     B --> C{Decision}
     C -->|One| D[Result 1]
     C -->|Two| E[Result 2]
+`;
+
+const CLASS_DIAGRAM_EXAMPLE = `classDiagram
+    class Animal {
+        +String name
+        +int age
+        +makeSound()
+    }
+    class Dog {
+        +String breed
+        +bark()
+    }
+    class Cat {
+        +String color
+        +meow()
+    }
+    Animal <|-- Dog
+    Animal <|-- Cat
+`;
+
+const STATE_DIAGRAM_V2_EXAMPLE = `stateDiagram-v2
+    [*] --> Still
+    Still --> [*]
+    Still --> Moving
+    Moving --> Still
+    Moving --> Crash
+    Crash --> [*]
 `;
 
 const MERMAID_THEMES = {
@@ -158,7 +186,15 @@ const MermaidEditor = () => {
           useMaxWidth: false,
           padding: 20
         },
+        state: {
+          useMaxWidth: false,
+          padding: 20
+        },
         stateDiagram: {
+          useMaxWidth: false,
+          padding: 20
+        },
+        stateDiagramV2: {
           useMaxWidth: false,
           padding: 20
         },
@@ -260,8 +296,10 @@ const MermaidEditor = () => {
         const altText = await getSelectedImageAltText();
         if (altText && (altText.includes("flowchart") || altText.includes("graph") || 
             altText.includes("sequenceDiagram") || altText.includes("classDiagram") ||
-            altText.includes("stateDiagram") || altText.includes("gantt") ||
-            altText.includes("pie") || altText.includes("journey"))) {
+            altText.includes("stateDiagram") || altText.includes("stateDiagram-v2") ||
+            altText.includes("gantt") || altText.includes("pie") || altText.includes("journey") ||
+            altText.includes("gitgraph") || altText.includes("erDiagram") || altText.includes("mindmap") ||
+            altText.includes("timeline") || altText.includes("sankey") || altText.includes("block"))) {
           setHasSelectedImage(true);
           setSelectedImageCode(altText);
         } else {
@@ -317,17 +355,35 @@ const MermaidEditor = () => {
     }
   };
 
+  const handleLoadExample = (example) => {
+    setCode(example);
+    setError(""); // Clear any previous errors
+  };
+
   return (
     <section className={styles.root} aria-label="Mermaid editor">
       <div className={styles.editorPreview}>
         <Field className={styles.editorField}>
-          <Text size="300" weight="semibold">Mermaid Code</Text>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <Text size="300" weight="semibold">Mermaid Code</Text>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(DEFAULT_DIAGRAM)}>
+                Flowchart
+              </Button>
+              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(CLASS_DIAGRAM_EXAMPLE)}>
+                Class
+              </Button>
+              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(STATE_DIAGRAM_V2_EXAMPLE)}>
+                State v2
+              </Button>
+            </div>
+          </div>
           <div className={styles.codeMirrorWrapper}>
             <CodeMirror
               value={code}
               onChange={handleCodeChange}
               height="260px"
-              extensions={[mermaidLanguage]}
+              extensions={[enhancedMermaidLanguage]}
               basicSetup={{
                 lineNumbers: true,
                 foldGutter: true,
