@@ -12,33 +12,6 @@ const DEFAULT_DIAGRAM = `flowchart LR
     C -->|Two| E[Result 2]
 `;
 
-const CLASS_DIAGRAM_EXAMPLE = `classDiagram
-    class Animal {
-        +String name
-        +int age
-        +makeSound()
-    }
-    class Dog {
-        +String breed
-        +bark()
-    }
-    class Cat {
-        +String color
-        +meow()
-    }
-    Animal <|-- Dog
-    Animal <|-- Cat
-`;
-
-const STATE_DIAGRAM_V2_EXAMPLE = `stateDiagram-v2
-    [*] --> Still
-    Still --> [*]
-    Still --> Moving
-    Moving --> Still
-    Moving --> Crash
-    Crash --> [*]
-`;
-
 const MERMAID_THEMES = {
   default: "default",
   dark: "dark",
@@ -367,17 +340,6 @@ const MermaidEditor = () => {
         <Field className={styles.editorField}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <Text size="300" weight="semibold">Mermaid Code</Text>
-            <div style={{ display: "flex", gap: "4px" }}>
-              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(DEFAULT_DIAGRAM)}>
-                Flowchart
-              </Button>
-              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(CLASS_DIAGRAM_EXAMPLE)}>
-                Class
-              </Button>
-              <Button size="small" appearance="subtle" onClick={() => handleLoadExample(STATE_DIAGRAM_V2_EXAMPLE)}>
-                State v2
-              </Button>
-            </div>
           </div>
           <div className={styles.codeMirrorWrapper}>
             <CodeMirror
