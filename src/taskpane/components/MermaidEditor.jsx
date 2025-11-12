@@ -1,3 +1,4 @@
+/* global Office */
 import * as React from "react";
 import mermaid from "mermaid";
 import { Field, Text, Button, makeStyles, mergeClasses, tokens, Dropdown, Option } from "@fluentui/react-components";
@@ -305,6 +306,7 @@ const MermaidEditor = () => {
     let isMounted = true;
     let initialTimeoutId = null;
     let intervalId = null;
+    let selectionHandlerRegistered = false;
 
     const checkSelectedImage = async () => {
       if (selectionCheckInProgressRef.current) {
@@ -340,7 +342,51 @@ const MermaidEditor = () => {
       }
     };
 
-    initialTimeoutId = setTimeout(checkSelectedImage, 250);
+    const registerSelectionChangedHandler = () => {
+      if (
+        typeof Office === "undefined" ||
+        !Office?.context?.document?.addHandlerAsync ||
+        !Office?.EventType?.DocumentSelectionChanged
+      ) {
+        return;
+      }
+
+      Office.context.document.addHandlerAsync(
+        Office.EventType.DocumentSelectionChanged,
+        checkSelectedImage,
+        (asyncResult) => {
+          if (asyncResult?.status === Office.AsyncResultStatus.Succeeded) {
+            selectionHandlerRegistered = true;
+          } else if (asyncResult?.error) {
+            console.log("Failed to register selection changed handler:", asyncResult.error);
+          }
+        }
+      );
+    };
+
+    const removeSelectionChangedHandler = () => {
+      if (
+        !selectionHandlerRegistered ||
+        typeof Office === "undefined" ||
+        !Office?.context?.document?.removeHandlerAsync ||
+        !Office?.EventType?.DocumentSelectionChanged
+      ) {
+        return;
+      }
+
+      Office.context.document.removeHandlerAsync(
+        Office.EventType.DocumentSelectionChanged,
+        checkSelectedImage
+      );
+    };
+
+    // Check immediately on mount and register event handler once Office is ready
+    initialTimeoutId = setTimeout(() => {
+      checkSelectedImage();
+      registerSelectionChangedHandler();
+    }, 100);
+
+    // Regular polling as a fallback in case events are missed
     intervalId = setInterval(checkSelectedImage, 3000);
 
     return () => {
@@ -351,9 +397,11 @@ const MermaidEditor = () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
+      removeSelectionChangedHandler();
       selectionCheckInProgressRef.current = false;
     };
   }, []);
+
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
