@@ -4,7 +4,7 @@
   <Version>1.0.0.0</Version>
   <ProviderName>Contoso</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Mermaid Diagram Assistant"/>
+  <DisplayName DefaultValue="MermaidSupport"/>
   <Description DefaultValue="Create and insert Mermaid diagrams directly in Word."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/logo-filled.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/logo-filled.png"/>
