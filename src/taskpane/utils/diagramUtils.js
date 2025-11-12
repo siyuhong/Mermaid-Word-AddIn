@@ -2,6 +2,7 @@ export const DIAGRAM_TYPES = {
   GANTT: "gantt",
   STATE: "stateDiagram",
   STATE_V2: "stateDiagram-v2",
+  CLASS: "classDiagram",
 };
 
 export function detectDiagramType(code) {
@@ -105,4 +106,8 @@ export function isStateDiagramV2(type) {
 
 export function isGanttDiagram(type) {
   return type === DIAGRAM_TYPES.GANTT;
+}
+
+export function isClassDiagram(type) {
+  return type === DIAGRAM_TYPES.CLASS;
 }

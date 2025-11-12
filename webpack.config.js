@@ -35,6 +35,7 @@ module.exports = async (env, options) => {
         "@codemirror/state": require.resolve("@codemirror/state"),
         "@codemirror/view": require.resolve("@codemirror/view"),
         "@codemirror/language": require.resolve("@codemirror/language"),
+        "@codemirror/autocomplete": require.resolve("@codemirror/autocomplete"),
       },
     },
     module: {
