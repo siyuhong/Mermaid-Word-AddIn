@@ -153,7 +153,7 @@ function calculateScaledDimensions(originalWidth, originalHeight, diagramType = 
   const preferredTargetWidth = isGanttDiagram(diagramType)
     ? WORD_MAX_WIDTH_PX
     : isStateDiagram(diagramType)
-      ? WORD_TARGET_WIDTH_PX * 0.75
+      ? WORD_TARGET_WIDTH_PX * 0.6
       : WORD_TARGET_WIDTH_PX;
 
   const minimumAcceptableWidth = isGanttDiagram(diagramType)

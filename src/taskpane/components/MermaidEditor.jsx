@@ -69,9 +69,11 @@ const useStyles = makeStyles({
     padding: "16px",
     minHeight: "240px",
     overflowX: "hidden",
+    overflowY: "auto",
   },
   previewContainerScrollable: {
     overflowX: "auto",
+    overflowY: "hidden",
   },
   previewContent: {
     width: "100%",
@@ -98,7 +100,7 @@ const useStyles = makeStyles({
   previewContentStateDiagram: {
     "& svg": {
       width: "100%",
-      maxWidth: "480px",
+      maxWidth: "380px",
       margin: "0 auto",
       height: "auto",
     },
@@ -149,6 +151,7 @@ const MermaidEditor = () => {
   const renderIndexRef = React.useRef(0);
   const debounceTimerRef = React.useRef(null);
   const selectionCheckInProgressRef = React.useRef(false);
+  const resizeTimerRef = React.useRef(null);
 
   // Initialize Mermaid configuration once
   const mermaidConfig = {
@@ -173,18 +176,18 @@ const MermaidEditor = () => {
       messageMargin: 35
     },
     gantt: {
-      useMaxWidth: true,
+      useMaxWidth: false,
       titleTopMargin: 25,
-      barHeight: 24,
-      fontSize: 14,
-      sectionFontSize: 14,
+      barHeight: 20,
+      fontSize: 12,
+      sectionFontSize: 12,
       gridLineStartPadding: 35,
       gridLineEndPadding: 35,
-      barGap: 6,
-      topPadding: 40,
-      leftPadding: 60,
-      rightPadding: 60,
-      bottomPadding: 40
+      barGap: 4,
+      topPadding: 30,
+      leftPadding: 50,
+      rightPadding: 50,
+      bottomPadding: 30
     },
     classDiagram: {
       useMaxWidth: false,
@@ -200,7 +203,8 @@ const MermaidEditor = () => {
     },
     stateDiagramV2: {
       useMaxWidth: true,
-      padding: 20
+      padding: 15,
+      maxWidth: 480
     },
     pie: {
       useMaxWidth: false,
@@ -300,6 +304,37 @@ const MermaidEditor = () => {
       }
     };
   }, [code, theme]);
+
+  // Handle window resize to re-render diagram with new dimensions
+  React.useEffect(() => {
+    const handleResize = async () => {
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
+      
+      resizeTimerRef.current = setTimeout(async () => {
+        // Trigger re-render when window size changes
+        if (previewRef.current && code) {
+          try {
+            const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
+            const { svg } = await mermaid.render(renderId, code);
+            previewRef.current.innerHTML = svg;
+          } catch (err) {
+            console.log("Error re-rendering on resize:", err);
+          }
+        }
+      }, 300);
+    };
+
+    window.addEventListener("resize", handleResize);
+    
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
+    };
+  }, [code]);
 
   // Check for selected images when component mounts or when selection might change
   React.useEffect(() => {
