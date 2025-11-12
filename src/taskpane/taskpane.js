@@ -363,8 +363,9 @@ export async function insertDiagram(svgContent, mermaidCode) {
     }
 
     await Word.run(async (context) => {
-      let body = context.document.body;
-      let image = body.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.end);
+      // Get the current selection to insert at cursor position
+      let selection = context.document.getSelection();
+      let image = selection.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.replace);
 
       image.altTextTitle = "Mermaid Diagram";
       image.altTextDescription = mermaidCode;
