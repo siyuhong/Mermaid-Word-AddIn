@@ -1,5 +1,7 @@
 /* global Word console, DOMParser, document, Image, window, btoa */
 
+import { detectDiagramType, isGanttDiagram, isStateDiagram } from "./utils/diagramUtils";
+
 const WORD_PAGE_WIDTH_INCHES = 6;
 const DPI = 96;
 const WORD_MAX_WIDTH_PX = WORD_PAGE_WIDTH_INCHES * DPI;
@@ -128,7 +130,7 @@ function getSvgDimensions(svgString) {
   }
 }
 
-function calculateScaledDimensions(originalWidth, originalHeight) {
+function calculateScaledDimensions(originalWidth, originalHeight, diagramType = "") {
   const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
   const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
 
@@ -146,30 +148,50 @@ function calculateScaledDimensions(originalWidth, originalHeight) {
     height = fallbackHeight;
   }
 
-  // Maintain aspect ratio with safe values
-  const aspectRatio = height / width || 1;
+  const safeAspectRatio = width > 0 ? height / width : fallbackHeight / fallbackWidth;
 
-  // Scale down if the image is wider than the target width
-  if (width > WORD_TARGET_WIDTH_PX) {
-    const scaledWidth = WORD_TARGET_WIDTH_PX;
-    const scaledHeight = scaledWidth * aspectRatio;
-    return { width: scaledWidth, height: scaledHeight };
+  const preferredTargetWidth = isGanttDiagram(diagramType)
+    ? WORD_MAX_WIDTH_PX
+    : isStateDiagram(diagramType)
+      ? WORD_TARGET_WIDTH_PX * 0.75
+      : WORD_TARGET_WIDTH_PX;
+
+  const minimumAcceptableWidth = isGanttDiagram(diagramType)
+    ? WORD_TARGET_WIDTH_PX
+    : WORD_TARGET_WIDTH_PX * 0.6;
+
+  const targetWidth = Math.min(
+    Math.max(preferredTargetWidth, minimumAcceptableWidth),
+    WORD_MAX_WIDTH_PX
+  );
+
+  let finalWidth = width;
+  let finalHeight = height;
+
+  if (width > targetWidth) {
+    finalWidth = targetWidth;
+    finalHeight = targetWidth * safeAspectRatio;
+  } else if (width < minimumAcceptableWidth) {
+    finalWidth = minimumAcceptableWidth;
+    finalHeight = minimumAcceptableWidth * safeAspectRatio;
   }
 
-  // If the image is smaller than target width but still larger than a reasonable minimum, scale it down slightly
-  if (width > WORD_TARGET_WIDTH_PX * 0.6) {
-    const scaledWidth = WORD_TARGET_WIDTH_PX;
-    const scaledHeight = scaledWidth * aspectRatio;
-    return { width: scaledWidth, height: scaledHeight };
-  }
-
-  // If the image is much smaller, keep original dimensions
-  return { width, height };
+  return { width: finalWidth, height: finalHeight };
 }
 
-async function svgToBase64Png(svgContent) {
+async function svgToBase64Png(svgContent, diagramType, baseDimensions) {
   return new Promise((resolve, reject) => {
     try {
+      const fallbackDimensions = baseDimensions || getSvgDimensions(svgContent);
+      const fallbackWidth =
+        Number.isFinite(fallbackDimensions?.width) && fallbackDimensions.width > 0
+          ? fallbackDimensions.width
+          : WORD_TARGET_WIDTH_PX;
+      const fallbackHeight =
+        Number.isFinite(fallbackDimensions?.height) && fallbackDimensions.height > 0
+          ? fallbackDimensions.height
+          : WORD_TARGET_WIDTH_PX * 0.75;
+
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
@@ -179,46 +201,46 @@ async function svgToBase64Png(svgContent) {
       }
 
       const img = new Image();
-
-      // Set crossOrigin to anonymous to prevent CORS issues
       img.crossOrigin = "anonymous";
 
       img.onload = () => {
         try {
-          const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
+          const intrinsicWidth =
+            Number.isFinite(img.naturalWidth) && img.naturalWidth > 0
+              ? img.naturalWidth
+              : fallbackWidth;
+          const intrinsicHeight =
+            Number.isFinite(img.naturalHeight) && img.naturalHeight > 0
+              ? img.naturalHeight
+              : fallbackHeight;
+
           const { width: scaledWidth, height: scaledHeight } = calculateScaledDimensions(
-            svgWidth,
-            svgHeight
+            intrinsicWidth,
+            intrinsicHeight,
+            diagramType
           );
 
-          // Set canvas dimensions with additional scale for better quality exports
           const devicePixelRatio = window.devicePixelRatio || 1;
           const exportScale = Math.max(devicePixelRatio, PNG_EXPORT_SCALE);
-          canvas.width = scaledWidth * exportScale;
-          canvas.height = scaledHeight * exportScale;
+          const scaledCanvasWidth = Math.max(Math.round(scaledWidth * exportScale), 1);
+          const scaledCanvasHeight = Math.max(Math.round(scaledHeight * exportScale), 1);
 
-          // Scale the context to match the export scale
-          ctx.scale(exportScale, exportScale);
+          canvas.width = scaledCanvasWidth;
+          canvas.height = scaledCanvasHeight;
+          ctx.setTransform(exportScale, 0, 0, exportScale, 0, 0);
 
-          // Set canvas CSS dimensions
-          canvas.style.width = scaledWidth + "px";
-          canvas.style.height = scaledHeight + "px";
+          canvas.style.width = `${scaledWidth}px`;
+          canvas.style.height = `${scaledHeight}px`;
 
-          // Fill white background
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, scaledWidth, scaledHeight);
-
-          // Enable image smoothing for better quality
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = "high";
-
-          // Draw the image
           ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-          // Use higher quality PNG
           const pngBase64 = canvas.toDataURL("image/png", 1.0).split(",")[1];
 
-          resolve(pngBase64);
+          resolve({ base64: pngBase64, width: scaledWidth, height: scaledHeight });
         } catch (err) {
           reject(err);
         }
@@ -298,6 +320,11 @@ export async function insertDiagram(svgContent, mermaidCode) {
       throw new Error("SVG content does not contain valid SVG markup");
     }
 
+    const diagramType = detectDiagramType(mermaidCode);
+    if (diagramType) {
+      console.log("Detected Mermaid diagram type:", diagramType);
+    }
+
     const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
     console.log("SVG dimensions:", { svgWidth, svgHeight });
 
@@ -311,39 +338,36 @@ export async function insertDiagram(svgContent, mermaidCode) {
       throw new Error(`Invalid SVG dimensions: ${svgWidth}x${svgHeight}`);
     }
 
-    const pngBase64 = await svgToBase64Png(svgContent);
-    console.log("PNG conversion successful, base64 length:", pngBase64.length);
+    const pngResult = await svgToBase64Png(svgContent, diagramType, {
+      width: svgWidth,
+      height: svgHeight,
+    });
+    const pngBase64 = pngResult?.base64;
+    const scaledWidth = pngResult?.width;
+    const scaledHeight = pngResult?.height;
+    console.log("PNG conversion successful, base64 length:", pngBase64?.length ?? 0);
 
-    // Validate base64 output
     if (!pngBase64 || typeof pngBase64 !== "string" || pngBase64.length === 0) {
       throw new Error("Failed to convert SVG to PNG - invalid base64 output");
+    }
+
+    console.log("Scaled dimensions for Word:", { scaledWidth, scaledHeight });
+
+    if (
+      !Number.isFinite(scaledWidth) ||
+      !Number.isFinite(scaledHeight) ||
+      scaledWidth <= 0 ||
+      scaledHeight <= 0
+    ) {
+      throw new Error(`Invalid scaled dimensions: ${scaledWidth}x${scaledHeight}`);
     }
 
     await Word.run(async (context) => {
       let body = context.document.body;
       let image = body.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.end);
 
-      // Set the alt-text to the Mermaid code for re-editing
       image.altTextTitle = "Mermaid Diagram";
       image.altTextDescription = mermaidCode;
-
-      // Set width to max Word page width while maintaining aspect ratio
-      const { width: scaledWidth, height: scaledHeight } = calculateScaledDimensions(
-        svgWidth,
-        svgHeight
-      );
-
-      console.log("Scaled dimensions for Word:", { scaledWidth, scaledHeight });
-
-      // Validate scaled dimensions
-      if (
-        !Number.isFinite(scaledWidth) ||
-        !Number.isFinite(scaledHeight) ||
-        scaledWidth <= 0 ||
-        scaledHeight <= 0
-      ) {
-        throw new Error(`Invalid scaled dimensions: ${scaledWidth}x${scaledHeight}`);
-      }
 
       image.width = Math.round(scaledWidth);
       image.height = Math.round(scaledHeight);

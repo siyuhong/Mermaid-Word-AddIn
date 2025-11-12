@@ -1,9 +1,10 @@
 import * as React from "react";
 import mermaid from "mermaid";
-import { Field, Text, Button, makeStyles, tokens, Dropdown, Option } from "@fluentui/react-components";
+import { Field, Text, Button, makeStyles, mergeClasses, tokens, Dropdown, Option } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage from "./enhancedMermaidLanguage";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
+import { detectDiagramType, isGanttDiagram, isStateDiagram } from "../utils/diagramUtils";
 
 const DEFAULT_DIAGRAM = `flowchart LR
     A[Hard] -->|Text| B(Round)
@@ -66,14 +67,38 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     padding: "16px",
     minHeight: "240px",
+    overflowX: "hidden",
+  },
+  previewContainerScrollable: {
+    overflowX: "auto",
   },
   previewContent: {
     width: "100%",
     overflow: "visible",
     "& svg": {
       display: "block",
+    },
+  },
+  previewContentResponsive: {
+    "& svg": {
       width: "100%",
       maxWidth: "100%",
+      height: "auto",
+    },
+  },
+  previewContentGantt: {
+    "& svg": {
+      width: "auto",
+      minWidth: "640px",
+      maxWidth: "none",
+      height: "auto",
+    },
+  },
+  previewContentStateDiagram: {
+    "& svg": {
+      width: "100%",
+      maxWidth: "480px",
+      margin: "0 auto",
       height: "auto",
     },
   },
@@ -118,9 +143,11 @@ const MermaidEditor = () => {
   const [theme, setTheme] = React.useState("default");
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
+  const [diagramType, setDiagramType] = React.useState("");
   const previewRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
   const debounceTimerRef = React.useRef(null);
+  const selectionCheckInProgressRef = React.useRef(false);
 
   // Initialize Mermaid configuration once
   const mermaidConfig = {
@@ -222,6 +249,7 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = "";
         setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
         setCanInsert(false);
+        setDiagramType("");
         return;
       }
 
@@ -238,6 +266,7 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = svg;
         setError("");
         setCanInsert(true);
+        setDiagramType(detectDiagramType(code));
       } catch (err) {
         if (!isActive) {
           return;
@@ -250,6 +279,7 @@ const MermaidEditor = () => {
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setCanInsert(false);
+        setDiagramType("");
       }
     };
 
@@ -272,9 +302,23 @@ const MermaidEditor = () => {
 
   // Check for selected images when component mounts or when selection might change
   React.useEffect(() => {
+    let isMounted = true;
+    let initialTimeoutId = null;
+    let intervalId = null;
+
     const checkSelectedImage = async () => {
+      if (selectionCheckInProgressRef.current) {
+        return;
+      }
+
+      selectionCheckInProgressRef.current = true;
+
       try {
         const mermaidCode = await getSelectedImageAltText();
+        if (!isMounted) {
+          return;
+        }
+
         if (mermaidCode) {
           const normalizedCode = mermaidCode.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
           setHasSelectedImage(true);
@@ -284,25 +328,36 @@ const MermaidEditor = () => {
           setSelectedImageCode((prev) => (prev ? "" : prev));
         }
       } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
         // If there's no selection or it's not a Mermaid image, reset state
         setHasSelectedImage(false);
         setSelectedImageCode((prev) => (prev ? "" : prev));
+      } finally {
+        selectionCheckInProgressRef.current = false;
       }
     };
 
-    // Check immediately
-    checkSelectedImage();
-
-    // Set up a periodic check (every 3 seconds) to detect selection changes
-    const intervalId = setInterval(checkSelectedImage, 3000);
+    initialTimeoutId = setTimeout(checkSelectedImage, 250);
+    intervalId = setInterval(checkSelectedImage, 3000);
 
     return () => {
-      clearInterval(intervalId);
+      isMounted = false;
+      if (initialTimeoutId) {
+        clearTimeout(initialTimeoutId);
+      }
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      selectionCheckInProgressRef.current = false;
     };
   }, []);
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
+    setDiagramType(detectDiagramType(newCode));
   };
 
   const handleThemeChange = (event, data) => {
@@ -312,6 +367,7 @@ const MermaidEditor = () => {
   const handleEditDiagram = () => {
     if (selectedImageCode) {
       setCode(selectedImageCode);
+      setDiagramType(detectDiagramType(selectedImageCode));
       setError(""); // Clear any previous errors
     }
   };
@@ -334,8 +390,20 @@ const MermaidEditor = () => {
 
   const handleLoadExample = (example) => {
     setCode(example);
+    setDiagramType(detectDiagramType(example));
     setError(""); // Clear any previous errors
   };
+
+  const previewContainerClassName = mergeClasses(
+    styles.previewContainer,
+    isGanttDiagram(diagramType) ? styles.previewContainerScrollable : undefined
+  );
+
+  const previewContentClassName = mergeClasses(
+    styles.previewContent,
+    isGanttDiagram(diagramType) ? styles.previewContentGantt : styles.previewContentResponsive,
+    isStateDiagram(diagramType) ? styles.previewContentStateDiagram : undefined
+  );
 
   return (
     <section className={styles.root} aria-label="Mermaid editor">
@@ -374,8 +442,8 @@ const MermaidEditor = () => {
               <Option value="neutral">Neutral</Option>
             </Dropdown>
           </div>
-          <div className={styles.previewContainer}>
-              <div ref={previewRef} className={styles.previewContent} />
+          <div className={previewContainerClassName}>
+            <div ref={previewRef} className={previewContentClassName} />
           </div>
         </div>
       </div>
