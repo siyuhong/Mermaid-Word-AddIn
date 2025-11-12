@@ -60,11 +60,13 @@ const useStyles = makeStyles({
   },
   editorField: {
     width: "100%",
+    boxSizing: "border-box",
   },
   codeMirrorWrapper: {
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
     overflow: "hidden",
+    boxSizing: "border-box",
   },
   previewHeader: {
     display: "flex",
@@ -85,6 +87,7 @@ const useStyles = makeStyles({
     minHeight: "240px",
     overflowX: "hidden",
     overflowY: "auto",
+    boxSizing: "border-box",
   },
   previewContainerScrollable: {
     overflowX: "auto",
@@ -93,6 +96,7 @@ const useStyles = makeStyles({
   previewContent: {
     width: "100%",
     overflow: "visible",
+    boxSizing: "border-box",
     "& svg": {
       display: "block",
     },
