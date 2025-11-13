@@ -9,24 +9,11 @@ import { EditorView } from "@codemirror/view";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 import { detectDiagramType, isGanttDiagram, isStateDiagram, isClassDiagram } from "../utils/diagramUtils";
 
-const DEFAULT_DIAGRAM = `classDiagram
-    class Animal {
-        +String name
-        +int age
-        +makeSound()
-    }
-    class Dog {
-        +String breed
-        +bark()
-    }
-    class Cat {
-        +String color
-        +meow()
-    }
-    Animal <|-- Dog
-    Animal <|-- Cat
-    Dog --|> Animal : "is a"
-    Cat --|> Animal : "is a"
+const DEFAULT_DIAGRAM = `flowchart LR
+A[Hard] -->|Text| B(Round)
+B --> C{Decision}
+C -->|One| D[Result 1]
+C -->|Two| E[Result 2]
 `;
 
 const MERMAID_THEMES = {
