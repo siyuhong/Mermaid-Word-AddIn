@@ -1,68 +1,132 @@
-# Build Word add-ins using Office Add-ins Development Kit
+# Mermaid Diagram Word Add-in
 
-Word add-ins are integrations built by third parties into Word by using [Word JavaScript API](https://learn.microsoft.com/en-us/office/dev/add-ins/reference/overview/word-add-ins-reference-overview) and [Office Platform capabilities](https://learn.microsoft.com/en-us/office/dev/add-ins/overview/office-add-ins).
+A Word add-in that allows you to create and insert Mermaid diagrams directly into your Word documents. Built with React 18, Fluent UI v9, and CodeMirror 6 for an enhanced editing experience.
 
-## How to run this project
+## Features
 
-### Prerequisites
+- **Interactive Diagram Editor**: Full-featured code editor with syntax highlighting for Mermaid diagram syntax
+- **Real-time Preview**: See your diagrams rendered in real-time as you type
+- **Multiple Diagram Types**: Support for all Mermaid diagram types including:
+  - Flowcharts
+  - Sequence diagrams
+  - Class diagrams
+  - State diagrams
+  - Entity Relationship diagrams
+  - Gantt charts
+  - Pie charts
+  - And more!
+- **Syntax Highlighting**: Enhanced CodeMirror 6 editor with Mermaid-specific syntax highlighting
+- **Auto-completion**: Smart auto-completion for Mermaid keywords, diagram types, and syntax
+- **Line Wrapping**: Automatic line wrapping for better readability of long lines
+- **Theme Selection**: Choose from multiple Mermaid themes (default, forest, dark, neutral)
+- **Edit Existing Diagrams**: Select an inserted diagram in Word and click "Edit Selected" to modify it
+- **High-Quality Output**: Diagrams are inserted as high-quality PNG images optimized for Word documents
 
-- Node.js (the latest LTS version). Visit the [Node.js site](https://nodejs.org/) to download and install the right version for your operating system. To verify that you've already installed these tools, run the commands `node -v` and `npm -v` in your terminal.
-- Office connected to a Microsoft 365 subscription. You might qualify for a Microsoft 365 E5 developer subscription through the [Microsoft 365 Developer Program](https://developer.microsoft.com/microsoft-365/dev-program), see [FAQ](https://learn.microsoft.com/office/developer-program/microsoft-365-developer-program-faq#who-qualifies-for-a-microsoft-365-e5-developer-subscription-) for details. Alternatively, you can [sign up for a 1-month free trial](https://www.microsoft.com/microsoft-365/try?rtc=1) or [purchase a Microsoft 365 plan](https://www.microsoft.com/microsoft-365/buy/compare-all-microsoft-365-products).
+## Prerequisites
 
-### Run the add-in using Office Add-ins Development Kit extension
+- **Node.js**: Latest LTS version. Visit the [Node.js site](https://nodejs.org/) to download and install. Verify installation with `node -v` and `npm -v`.
+- **Microsoft 365**: Office connected to a Microsoft 365 subscription. You might qualify for a [Microsoft 365 E5 developer subscription](https://developer.microsoft.com/microsoft-365/dev-program), or you can [sign up for a 1-month free trial](https://www.microsoft.com/microsoft-365/try?rtc=1).
+
+## Installation & Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev-server
+   ```
+4. In another terminal, sideload the add-in:
+   ```bash
+   npm start
+   ```
+
+## Development
+
+### Run the add-in using Office Add-ins Development Kit
 
 1. **Open the Office Add-ins Development Kit**
-    
-    In the **Activity Bar**, select the **Office Add-ins Development Kit** icon to open the extension.
+   
+   In VS Code's Activity Bar, select the **Office Add-ins Development Kit** icon.
 
-1. **Preview Your Office Add-in (F5)**
+2. **Preview Your Office Add-in (F5)**
 
-    Select **Preview Your Office Add-in(F5)** to launch the add-in and debug the code. In the Quick Pick menu, select the option **Word Desktop (Edge Chromium)**.
+   Select **Preview Your Office Add-in(F5)** to launch the add-in. In the Quick Pick menu, select **Word Desktop (Edge Chromium)**.
+   
+   The extension checks prerequisites before debugging starts. After verification, Word launches with the add-in sideloaded.
 
-    The extension then checks that the prerequisites are met before debugging starts. Check the terminal for detailed information if there are issues with your environment. After this process, the Word desktop application launches and sideloads the add-in.
+3. **Stop Previewing Your Office Add-in**
 
-1. **Stop Previewing Your Office Add-in**
+   Once finished testing, select **Stop Previewing Your Office Add-in** to close the web server and remove the add-in from the registry and cache.
 
-    Once you are finished testing and debugging the add-in, select **Stop Previewing Your Office Add-in**. This closes the web server and removes the add-in from the registry and cache.
+### Project Scripts
 
-## Use the add-in project
+- `npm run build` - Build for production
+- `npm run build:dev` - Build for development
+- `npm run dev-server` - Start development server with hot reload
+- `npm start` - Sideload the add-in to Word
+- `npm stop` - Remove the add-in from Word
+- `npm run validate` - Validate the manifest file
+- `npm run lint` - Check code style
+- `npm run lint:fix` - Auto-fix code style issues
 
-The add-in project that you've created contains sample code for a basic task pane add-in.
+## Using the Add-in
 
-## Explore the add-in code
+1. Open Word and find the **Mermaid Editor** button in the Insert tab
+2. Click to open the task pane
+3. Write your Mermaid diagram code in the editor (or use the default example)
+4. Preview the rendered diagram in the preview pane
+5. Optionally select a theme from the dropdown
+6. Click **Insert Diagram** to insert it into your Word document
+7. To edit an existing diagram:
+   - Select the diagram image in Word
+   - Click **Edit Selected** in the task pane
+   - The diagram code will load into the editor
+   - Make your changes and insert the updated diagram
 
-To explore an Office add-in project, you can start with the key files listed below.
+## Project Structure
 
-- The `./manifest.xml` file in the root directory of the project defines the settings and capabilities of the add-in.  <br>You can check whether your manifest file is valid by selecting **Validate Manifest File** option from the Office Add-ins Development Kit.
-- The `./src/taskpane/taskpane.html` file contains the HTML markup for the task pane.
-- The `./src/taskpane/**/*.jsx` file contains the react code and Office JavaScript API code that facilitates interaction between the task pane and the Word application.
+- `/src/taskpane/`
+  - `index.jsx` - React entry point with Office.js initialization
+  - `taskpane.js` - Word JavaScript API integration
+  - `components/MermaidEditor.jsx` - Main editor component
+  - `components/enhancedMermaidLanguage.js` - Enhanced Mermaid language support for CodeMirror
+  - `utils/diagramUtils.js` - Diagram detection and utility functions
+- `/assets/` - Add-in icons and images
+- `manifest.xml` - Add-in manifest configuration
+- `webpack.config.js` - Webpack bundler configuration
+
+## Key Technologies
+
+- **React 18** - UI framework
+- **Fluent UI v9** - Microsoft's design system
+- **CodeMirror 6** - Code editor with syntax highlighting
+- **Mermaid.js** - Diagram rendering engine
+- **Office.js** - Word JavaScript API
+- **Webpack** - Module bundler
 
 ## Troubleshooting
 
-If you have problems running the add-in, take these steps.
+If you have problems running the add-in:
 
-- Close any open instances of Word.
-- Close the previous web server started for the add-in with the **Stop Previewing Your Office Add-in** Office Add-ins Development Kit extension option.
+- Close any open instances of Word
+- Stop the previous web server with **Stop Previewing Your Office Add-in**
+- Clear the Office cache (if issues persist)
 
-If you still have problems, see [troubleshoot development errors](https://learn.microsoft.com//office/dev/add-ins/testing/troubleshoot-development-errors) or [create a GitHub issue](https://aka.ms/officedevkitnewissue) and we'll help you.  
+For more help, see [troubleshoot development errors](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-development-errors) or [create a GitHub issue](https://aka.ms/officedevkitnewissue).
 
-For information on running the add-in on Word on the web, see [Sideload Office Add-ins to Office on the web](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing).
+## Additional Resources
 
-For information on debugging on older versions of Office, see [Debug add-ins using developer tools in Microsoft Edge Legacy](https://learn.microsoft.com/office/dev/add-ins/testing/debug-add-ins-using-devtools-edge-legacy).
+- [Office Add-ins Documentation](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins)
+- [Word JavaScript API Reference](https://learn.microsoft.com/javascript/api/word)
+- [Mermaid Documentation](https://mermaid.js.org/)
+- [Sideload Office Add-ins to Office on the web](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)
 
-## Make code changes
+## License
 
-All the information about Office Add-ins is found in our [official documentation](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins). You can also explore more samples in the Office Add-ins Development Kit. Select **View Samples** to see more samples of real-world scenarios.
-
-If you edit the manifest as part of your changes, use the **Validate Manifest File** option in the Office Add-ins Development Kit. This shows you errors in the manifest syntax.
-
-## Engage with the team
-
-Did you experience any problems? [Create an issue](https://aka.ms/officedevkitnewissue) and we'll help you out.
-
-Want to learn more about new features and best practices for the Office platform? [Join the Microsoft Office Add-ins community call](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins-community-call).
-
-## Copyright
+MIT License
 
 Copyright (c) 2024 Microsoft Corporation. All rights reserved.
 
