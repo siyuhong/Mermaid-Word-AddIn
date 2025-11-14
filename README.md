@@ -36,7 +36,7 @@ Built with React 18, Fluent UI v9, and CodeMirror 6 for an enhanced editing expe
 
 1. Clone the repository
    ```bash
-   git clone git@github.com:siyuhong/MermaidSupport.git
+   git clone git@github.com:siyuhong/Mermaid-Word-AddIn.git
    ```
 2. Install dependencies:
    ```bash
