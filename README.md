@@ -1,6 +1,11 @@
 # Mermaid Diagram Word Add-in
 
-A Word add-in that allows you to create and insert Mermaid diagrams directly into your Word documents. Built with React 18, Fluent UI v9, and CodeMirror 6 for an enhanced editing experience.
+A Word add-in, which allows you to write mermaid code and insert its preview directly into a Word document. The image in the inserted Word can get mermaid code at any time and be re-edited!
+
+Built with React 18, Fluent UI v9, and CodeMirror 6 for an enhanced editing experience.
+
+> [!IMPORTANT]
+> **This project is mainly completed by [CTO.NEW](https://cto.new/) !**
 
 ## Features
 
@@ -30,6 +35,9 @@ A Word add-in that allows you to create and insert Mermaid diagrams directly int
 ## Installation & Setup
 
 1. Clone the repository
+   ```bash
+   git clone git@github.com:siyuhong/MermaidSupport.git
+   ```
 2. Install dependencies:
    ```bash
    npm install
@@ -47,14 +55,14 @@ A Word add-in that allows you to create and insert Mermaid diagrams directly int
 
 ### Run the add-in using Office Add-ins Development Kit
 
-1. **Open the Office Add-ins Development Kit**
-   
-   In VS Code's Activity Bar, select the **Office Add-ins Development Kit** icon.
+1. **Install Office Add-ins Development Kit In Visual Studio Code**
+
+   Search for Office Add-ins Development Kit in VSCode extension and install it.
 
 2. **Preview Your Office Add-in (F5)**
 
    Select **Preview Your Office Add-in(F5)** to launch the add-in. In the Quick Pick menu, select **Word Desktop (Edge Chromium)**.
-   
+
    The extension checks prerequisites before debugging starts. After verification, Word launches with the add-in sideloaded.
 
 3. **Stop Previewing Your Office Add-in**
@@ -129,7 +137,3 @@ For more help, see [troubleshoot development errors](https://learn.microsoft.com
 MIT License
 
 Copyright (c) 2024 Microsoft Corporation. All rights reserved.
-
-## Disclaimer
-
-**THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.**
