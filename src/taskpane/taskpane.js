@@ -3,7 +3,7 @@
 import { detectDiagramType, isGanttDiagram, isStateDiagram } from "./utils/diagramUtils";
 
 // Constants for Word page dimensions
-// Default to US Letter size (8.5" x 11" = 612 x 792 points) with 1" margins (72 points)
+// Default fallback values: US Letter size (8.5" x 11" = 612 x 792 points) with 1" margins (72 points)
 // 1 point = 1/72 inch (Word uses points for sizing)
 const DEFAULT_PAGE_WIDTH_POINTS = 612; // 8.5 inches
 const DEFAULT_PAGE_HEIGHT_POINTS = 792; // 11 inches
@@ -12,6 +12,67 @@ const POINTS_PER_INCH = 72;
 const PNG_DPI = 300; // Use 300 DPI for high-quality PNG export
 const PIXELS_PER_POINT = PNG_DPI / POINTS_PER_INCH; // 4.167 pixels per point at 300 DPI
 const MIN_DIAGRAM_SIZE_POINTS = 144; // 2 inches minimum
+
+// Get actual page dimensions and margins from the document
+async function getDocumentPageDimensions() {
+  try {
+    return await Word.run(async (context) => {
+      // Get the current selection to determine which section we're in
+      const selection = context.document.getSelection();
+      selection.load("parentSectionOrNullObject");
+      await context.sync();
+
+      const parentSection = selection.parentSectionOrNullObject;
+      if (!parentSection || parentSection.isNullObject) {
+        throw new Error("Selection is not associated with a section");
+      }
+
+      // Load the pageSetup properties
+      parentSection.load("pageSetup");
+      await context.sync();
+
+      const pageSetup = parentSection.pageSetup;
+      pageSetup.load([
+        "pageWidth",
+        "pageHeight",
+        "leftMargin",
+        "rightMargin",
+        "topMargin",
+        "bottomMargin",
+      ]);
+      await context.sync();
+
+      console.log("Retrieved page dimensions from document:", {
+        pageWidth: pageSetup.pageWidth,
+        pageHeight: pageSetup.pageHeight,
+        leftMargin: pageSetup.leftMargin,
+        rightMargin: pageSetup.rightMargin,
+        topMargin: pageSetup.topMargin,
+        bottomMargin: pageSetup.bottomMargin,
+      });
+
+      return {
+        pageWidth: pageSetup.pageWidth,
+        pageHeight: pageSetup.pageHeight,
+        marginLeft: pageSetup.leftMargin,
+        marginRight: pageSetup.rightMargin,
+        marginTop: pageSetup.topMargin,
+        marginBottom: pageSetup.bottomMargin,
+      };
+    });
+  } catch (error) {
+    console.log("Could not retrieve page dimensions from document, using defaults:", error);
+    // Fallback to default values if retrieval fails
+    return {
+      pageWidth: DEFAULT_PAGE_WIDTH_POINTS,
+      pageHeight: DEFAULT_PAGE_HEIGHT_POINTS,
+      marginLeft: DEFAULT_MARGIN_POINTS,
+      marginRight: DEFAULT_MARGIN_POINTS,
+      marginTop: DEFAULT_MARGIN_POINTS,
+      marginBottom: DEFAULT_MARGIN_POINTS,
+    };
+  }
+}
 
 export async function insertText(text) {
   // Write text to the document.
@@ -183,7 +244,28 @@ function getSvgDimensions(svgString) {
   }
 }
 
-function calculateDiagramDisplaySize(originalWidth, originalHeight, diagramType = "") {
+function normalizePageDimensions(pageDimensions) {
+  const layout = pageDimensions || {};
+
+  const ensure = (value, fallback) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+
+  return {
+    pageWidth: ensure(layout.pageWidth, DEFAULT_PAGE_WIDTH_POINTS),
+    pageHeight: ensure(layout.pageHeight, DEFAULT_PAGE_HEIGHT_POINTS),
+    marginLeft: ensure(layout.marginLeft, DEFAULT_MARGIN_POINTS),
+    marginRight: ensure(layout.marginRight, DEFAULT_MARGIN_POINTS),
+    marginTop: ensure(layout.marginTop, DEFAULT_MARGIN_POINTS),
+    marginBottom: ensure(layout.marginBottom, DEFAULT_MARGIN_POINTS),
+  };
+}
+
+function calculateDiagramDisplaySize(
+  originalWidth,
+  originalHeight,
+  diagramType = "",
+  pageDimensions
+) {
   const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
   const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
 
@@ -194,12 +276,17 @@ function calculateDiagramDisplaySize(originalWidth, originalHeight, diagramType 
       ? originalWidth / originalHeight
       : DEFAULT_ASPECT_RATIO;
 
+  const normalizedDimensions = normalizePageDimensions(pageDimensions);
   const availableWidth = Math.max(
-    DEFAULT_PAGE_WIDTH_POINTS - DEFAULT_MARGIN_POINTS * 2,
+    normalizedDimensions.pageWidth -
+      normalizedDimensions.marginLeft -
+      normalizedDimensions.marginRight,
     MIN_DIAGRAM_SIZE_POINTS
   );
   const availableHeight = Math.max(
-    DEFAULT_PAGE_HEIGHT_POINTS - DEFAULT_MARGIN_POINTS * 2,
+    normalizedDimensions.pageHeight -
+      normalizedDimensions.marginTop -
+      normalizedDimensions.marginBottom,
     MIN_DIAGRAM_SIZE_POINTS
   );
 
@@ -282,7 +369,13 @@ function calculateDiagramDisplaySize(originalWidth, originalHeight, diagramType 
   return { width: Math.round(targetWidth), height: Math.round(targetHeight) };
 }
 
-async function svgToBase64Png(svgContent, diagramType, baseDimensions, targetDisplayDimensions) {
+async function svgToBase64Png(
+  svgContent,
+  diagramType,
+  baseDimensions,
+  targetDisplayDimensions,
+  pageDimensions
+) {
   return new Promise((resolve, reject) => {
     try {
       const canvas = document.createElement("canvas");
@@ -324,7 +417,7 @@ async function svgToBase64Png(svgContent, diagramType, baseDimensions, targetDis
           // Calculate optimal display size in points (Word's unit)
           const { width: displayWidth, height: displayHeight } = hasValidTargetSize
             ? targetDisplayDimensions
-            : calculateDiagramDisplaySize(svgWidth, svgHeight, diagramType);
+            : calculateDiagramDisplaySize(svgWidth, svgHeight, diagramType, pageDimensions);
 
           // Calculate 300 DPI pixel dimensions for the target display size
           const canvasWidth = Math.max(Math.round(displayWidth * PIXELS_PER_POINT), 1);
@@ -452,7 +545,16 @@ export async function insertDiagram(svgContent, mermaidCode) {
       throw new Error(`Invalid SVG dimensions: ${svgWidth}x${svgHeight}`);
     }
 
-    const targetDisplaySize = calculateDiagramDisplaySize(svgWidth, svgHeight, diagramType);
+    // Get actual page dimensions from the document
+    const pageDimensions = await getDocumentPageDimensions();
+    console.log("Page dimensions:", pageDimensions);
+
+    const targetDisplaySize = calculateDiagramDisplaySize(
+      svgWidth,
+      svgHeight,
+      diagramType,
+      pageDimensions
+    );
     console.log("Calculated target display size (points):", targetDisplaySize);
 
     // Convert SVG to PNG with optimal sizing
@@ -460,7 +562,8 @@ export async function insertDiagram(svgContent, mermaidCode) {
       svgContent,
       diagramType,
       { width: svgWidth, height: svgHeight },
-      targetDisplaySize
+      targetDisplaySize,
+      pageDimensions
     );
 
     const pngBase64 = pngResult?.base64;
