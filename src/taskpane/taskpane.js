@@ -293,20 +293,24 @@ function calculateDiagramDisplaySize(
   console.log("Available space (points):", availableWidth, "x", availableHeight);
   console.log("SVG aspect ratio:", svgAspectRatio);
 
-  const availableAspectRatio = availableWidth / availableHeight;
+  // Use 85% of available space for better layout and prevent overflow
+  const maxUsableWidth = availableWidth * 0.85;
+  const maxUsableHeight = availableHeight * 0.85;
+
+  const availableAspectRatio = maxUsableWidth / maxUsableHeight;
 
   let targetWidth, targetHeight;
 
   if (svgAspectRatio > availableAspectRatio) {
     // SVG is wider relative to available space - fit to width
-    targetWidth = availableWidth;
+    targetWidth = maxUsableWidth;
     targetHeight = targetWidth / svgAspectRatio;
-    console.log("Fitting to width");
+    console.log("Fitting to width (85% of available)");
   } else {
     // SVG is taller relative to available space - fit to height
-    targetHeight = availableHeight;
+    targetHeight = maxUsableHeight;
     targetWidth = targetHeight * svgAspectRatio;
-    console.log("Fitting to height");
+    console.log("Fitting to height (85% of available)");
   }
 
   // Ensure minimum size (at least 2 inches wide or tall)
@@ -321,6 +325,19 @@ function calculateDiagramDisplaySize(
     console.log("Applied minimum size constraint");
   }
 
+  // Ensure we don't exceed the available space even with minimum size
+  if (targetWidth > maxUsableWidth) {
+    targetWidth = maxUsableWidth;
+    targetHeight = targetWidth / svgAspectRatio;
+    console.log("Capped to maximum width");
+  }
+
+  if (targetHeight > maxUsableHeight) {
+    targetHeight = maxUsableHeight;
+    targetWidth = targetHeight * svgAspectRatio;
+    console.log("Capped to maximum height");
+  }
+
   console.log("Calculated diagram display size (points):", {
     diagramType,
     targetWidth,
@@ -328,6 +345,8 @@ function calculateDiagramDisplaySize(
     svgAspectRatio,
     availableWidth,
     availableHeight,
+    maxUsableWidth,
+    maxUsableHeight,
   });
 
   return { width: Math.round(targetWidth), height: Math.round(targetHeight) };

@@ -88,16 +88,19 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensio
     MIN_PREVIEW_SIZE_POINTS
   );
 
-  const availableAspectRatio = availableWidth / availableHeight;
+  const maxUsableWidth = availableWidth * 0.85;
+  const maxUsableHeight = availableHeight * 0.85;
+
+  const availableAspectRatio = maxUsableWidth / maxUsableHeight;
 
   let targetWidth;
   let targetHeight;
 
   if (aspectRatio > availableAspectRatio) {
-    targetWidth = availableWidth;
+    targetWidth = maxUsableWidth;
     targetHeight = targetWidth / aspectRatio;
   } else {
-    targetHeight = availableHeight;
+    targetHeight = maxUsableHeight;
     targetWidth = targetHeight * aspectRatio;
   }
 
@@ -111,10 +114,22 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensio
     }
   }
 
+  if (targetWidth > maxUsableWidth) {
+    targetWidth = maxUsableWidth;
+    targetHeight = targetWidth / aspectRatio;
+  }
+
+  if (targetHeight > maxUsableHeight) {
+    targetHeight = maxUsableHeight;
+    targetWidth = targetHeight * aspectRatio;
+  }
+
   console.log("Preview calculated with page dimensions:", {
     pageDimensions,
     availableWidth,
     availableHeight,
+    maxUsableWidth,
+    maxUsableHeight,
     targetWidth: Math.round(targetWidth),
     targetHeight: Math.round(targetHeight),
   });
