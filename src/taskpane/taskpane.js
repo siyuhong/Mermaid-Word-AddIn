@@ -1,6 +1,6 @@
 /* global Word console, DOMParser, document, Image, btoa */
 
-import { detectDiagramType, isGanttDiagram, isStateDiagram } from "./utils/diagramUtils";
+import { detectDiagramType } from "./utils/diagramUtils";
 
 // Constants for Word page dimensions
 // Default fallback values: US Letter size (8.5" x 11" = 612 x 792 points) with 1" margins (72 points)
@@ -14,7 +14,7 @@ const PIXELS_PER_POINT = PNG_DPI / POINTS_PER_INCH; // 4.167 pixels per point at
 const MIN_DIAGRAM_SIZE_POINTS = 144; // 2 inches minimum
 
 // Get actual page dimensions and margins from the document
-async function getDocumentPageDimensions() {
+export async function getDocumentPageDimensions() {
   try {
     return await Word.run(async (context) => {
       // Get the current selection to determine which section we're in

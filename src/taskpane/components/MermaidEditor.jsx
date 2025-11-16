@@ -6,7 +6,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
 import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
-import { insertDiagram, getSelectedImageAltText } from "../taskpane";
+import { insertDiagram, getSelectedImageAltText, getDocumentPageDimensions } from "../taskpane";
 import { detectDiagramType, isGanttDiagram, isStateDiagram, isClassDiagram } from "../utils/diagramUtils";
 
 const DEFAULT_DIAGRAM = `flowchart LR
@@ -35,24 +35,37 @@ const DEFAULT_PAGE_HEIGHT_POINTS = 792;
 const DEFAULT_MARGIN_POINTS = 72;
 const MIN_PREVIEW_SIZE_POINTS = 144;
 const POINTS_PER_INCH = 72;
-const SCREEN_DPI = 96;
-const PIXELS_PER_POINT = SCREEN_DPI / POINTS_PER_INCH;
-const PREVIEW_MAX_HEIGHT = 400;
-const PREVIEW_PADDING_HORIZONTAL = 32;
-const PREVIEW_PADDING_VERTICAL = 32;
+const DEFAULT_SCREEN_DPI = 96;
 
-const DEFAULT_PAGE_DIMENSIONS = {
+const createDefaultPageDimensions = () => ({
   pageWidth: DEFAULT_PAGE_WIDTH_POINTS,
   pageHeight: DEFAULT_PAGE_HEIGHT_POINTS,
   marginLeft: DEFAULT_MARGIN_POINTS,
   marginRight: DEFAULT_MARGIN_POINTS,
   marginTop: DEFAULT_MARGIN_POINTS,
   marginBottom: DEFAULT_MARGIN_POINTS,
+});
+
+const DEFAULT_PAGE_DIMENSIONS = createDefaultPageDimensions();
+
+const getPixelsPerPoint = () => {
+  if (typeof window !== "undefined") {
+    const devicePixelRatio =
+      typeof window.devicePixelRatio === "number" &&
+      Number.isFinite(window.devicePixelRatio) &&
+      window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1;
+
+    return (DEFAULT_SCREEN_DPI * devicePixelRatio) / POINTS_PER_INCH;
+  }
+
+  return DEFAULT_SCREEN_DPI / POINTS_PER_INCH;
 };
 
 const DEFAULT_ASPECT_RATIO = 4 / 3;
 
-const calculatePreviewDisplaySize = (originalWidth, originalHeight) => {
+const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensions = DEFAULT_PAGE_DIMENSIONS) => {
   const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
   const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
 
@@ -62,16 +75,16 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight) => {
       : DEFAULT_ASPECT_RATIO;
 
   const availableWidth = Math.max(
-    DEFAULT_PAGE_DIMENSIONS.pageWidth -
-      DEFAULT_PAGE_DIMENSIONS.marginLeft -
-      DEFAULT_PAGE_DIMENSIONS.marginRight,
+    pageDimensions.pageWidth -
+      pageDimensions.marginLeft -
+      pageDimensions.marginRight,
     MIN_PREVIEW_SIZE_POINTS
   );
 
   const availableHeight = Math.max(
-    DEFAULT_PAGE_DIMENSIONS.pageHeight -
-      DEFAULT_PAGE_DIMENSIONS.marginTop -
-      DEFAULT_PAGE_DIMENSIONS.marginBottom,
+    pageDimensions.pageHeight -
+      pageDimensions.marginTop -
+      pageDimensions.marginBottom,
     MIN_PREVIEW_SIZE_POINTS
   );
 
@@ -97,6 +110,14 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight) => {
       targetWidth = targetHeight * aspectRatio;
     }
   }
+
+  console.log("Preview calculated with page dimensions:", {
+    pageDimensions,
+    availableWidth,
+    availableHeight,
+    targetWidth: Math.round(targetWidth),
+    targetHeight: Math.round(targetHeight),
+  });
 
   return {
     width: Math.round(targetWidth),
@@ -299,6 +320,7 @@ const MermaidEditor = () => {
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const [diagramType, setDiagramType] = React.useState("");
+  const [pageDimensions, setPageDimensions] = React.useState(() => ({ ...DEFAULT_PAGE_DIMENSIONS }));
   const previewRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
@@ -306,6 +328,9 @@ const MermaidEditor = () => {
   const debounceTimerRef = React.useRef(null);
   const selectionCheckInProgressRef = React.useRef(false);
   const resizeTimerRef = React.useRef(null);
+  const pageDimensionsRef = React.useRef({ ...DEFAULT_PAGE_DIMENSIONS });
+  const pageDimensionsRequestRef = React.useRef(false);
+  const lastPageDimensionsUpdateRef = React.useRef(0);
 
   const clearPreviewAnimationFrame = React.useCallback(() => {
     if (previewAnimationFrameRef.current) {
@@ -313,6 +338,69 @@ const MermaidEditor = () => {
       previewAnimationFrameRef.current = null;
     }
   }, []);
+
+  const fetchPageDimensions = React.useCallback(async () => {
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastPageDimensionsUpdateRef.current;
+
+    if (pageDimensionsRequestRef.current) {
+      return pageDimensionsRef.current;
+    }
+
+    if (timeSinceLastUpdate < 2000) {
+      return pageDimensionsRef.current;
+    }
+
+    try {
+      pageDimensionsRequestRef.current = true;
+      console.log("Fetching page dimensions from Word document...");
+      
+      const dims = await getDocumentPageDimensions();
+      
+      if (dims && typeof dims === "object") {
+        const ensurePositive = (value, minValue, fallback) =>
+          typeof value === "number" && Number.isFinite(value) && value > minValue ? value : fallback;
+
+        const ensureNonNegative = (value, fallback) =>
+          typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
+
+        const normalizedDims = {
+          pageWidth: ensurePositive(dims.pageWidth, 0, DEFAULT_PAGE_WIDTH_POINTS),
+          pageHeight: ensurePositive(dims.pageHeight, 0, DEFAULT_PAGE_HEIGHT_POINTS),
+          marginLeft: ensureNonNegative(dims.marginLeft, DEFAULT_MARGIN_POINTS),
+          marginRight: ensureNonNegative(dims.marginRight, DEFAULT_MARGIN_POINTS),
+          marginTop: ensureNonNegative(dims.marginTop, DEFAULT_MARGIN_POINTS),
+          marginBottom: ensureNonNegative(dims.marginBottom, DEFAULT_MARGIN_POINTS),
+        };
+
+        pageDimensionsRef.current = normalizedDims;
+        lastPageDimensionsUpdateRef.current = now;
+        
+        setPageDimensions((prev) => {
+          if (
+            prev.pageWidth !== normalizedDims.pageWidth ||
+            prev.pageHeight !== normalizedDims.pageHeight ||
+            prev.marginLeft !== normalizedDims.marginLeft ||
+            prev.marginRight !== normalizedDims.marginRight ||
+            prev.marginTop !== normalizedDims.marginTop ||
+            prev.marginBottom !== normalizedDims.marginBottom
+          ) {
+            console.log("Page dimensions updated:", normalizedDims);
+            return normalizedDims;
+          }
+          return prev;
+        });
+
+        return normalizedDims;
+      }
+    } catch (error) {
+      console.log("Failed to fetch page dimensions, using cached/default:", error);
+    } finally {
+      pageDimensionsRequestRef.current = false;
+    }
+
+    return pageDimensionsRef.current;
+  }, [setPageDimensions]);
 
   const resetPreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
@@ -352,14 +440,33 @@ const MermaidEditor = () => {
       return;
     }
 
-    const optimalSizePoints = calculatePreviewDisplaySize(svgWidth, svgHeight);
+    const currentPageDims = pageDimensionsRef.current;
+    const optimalSizePoints = calculatePreviewDisplaySize(svgWidth, svgHeight, currentPageDims);
 
-    let targetWidthPx = Math.max(1, Math.round(optimalSizePoints.width * PIXELS_PER_POINT));
-    let targetHeightPx = Math.max(1, Math.round(optimalSizePoints.height * PIXELS_PER_POINT));
+    const pixelsPerPoint = getPixelsPerPoint();
+    let targetWidthPx = Math.max(1, Math.round(optimalSizePoints.width * pixelsPerPoint));
+    let targetHeightPx = Math.max(1, Math.round(optimalSizePoints.height * pixelsPerPoint));
 
-    const containerRect = previewContainerRef.current.getBoundingClientRect();
-    const availableWidth = Math.max(containerRect.width - PREVIEW_PADDING_HORIZONTAL, 1);
-    const maxContentHeight = Math.max(PREVIEW_MAX_HEIGHT - PREVIEW_PADDING_VERTICAL, 1);
+    const containerElement = previewContainerRef.current;
+    const containerRect = containerElement.getBoundingClientRect();
+    const containerWidth = containerRect.width || containerElement.clientWidth || containerElement.offsetWidth || 0;
+    const containerHeight = containerRect.height || containerElement.clientHeight || containerElement.offsetHeight || 0;
+
+    let horizontalPadding = 0;
+    let verticalPadding = 0;
+
+    if (typeof window !== "undefined" && containerElement) {
+      const computedStyle = window.getComputedStyle(containerElement);
+      horizontalPadding =
+        (parseFloat(computedStyle.paddingLeft) || 0) +
+        (parseFloat(computedStyle.paddingRight) || 0);
+      verticalPadding =
+        (parseFloat(computedStyle.paddingTop) || 0) +
+        (parseFloat(computedStyle.paddingBottom) || 0);
+    }
+
+    const availableWidth = Math.max(containerWidth - horizontalPadding, 1);
+    const availableHeight = Math.max(containerHeight - verticalPadding, 1);
 
     let scale = 1;
 
@@ -367,8 +474,8 @@ const MermaidEditor = () => {
       scale = Math.min(scale, availableWidth / targetWidthPx);
     }
 
-    if (targetHeightPx > maxContentHeight && maxContentHeight > 0) {
-      scale = Math.min(scale, maxContentHeight / targetHeightPx);
+    if (targetHeightPx > availableHeight && availableHeight > 0) {
+      scale = Math.min(scale, availableHeight / targetHeightPx);
     }
 
     if (!Number.isFinite(scale) || scale <= 0) {
@@ -483,6 +590,10 @@ const MermaidEditor = () => {
   }), [theme]);
 
   React.useEffect(() => {
+    fetchPageDimensions();
+  }, [fetchPageDimensions]);
+
+  React.useEffect(() => {
     console.log("Initializing Mermaid with theme:", theme);
     try {
       mermaid.initialize(mermaidConfig);
@@ -499,6 +610,8 @@ const MermaidEditor = () => {
       if (!previewRef.current) {
         return;
       }
+
+      await fetchPageDimensions();
 
       try {
         // First validate the Mermaid syntax
@@ -566,7 +679,7 @@ const MermaidEditor = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [code, theme, schedulePreviewSizing, resetPreviewSizing]);
+  }, [code, theme, schedulePreviewSizing, resetPreviewSizing, fetchPageDimensions]);
 
   // Handle window resize to re-render diagram with new dimensions
   React.useEffect(() => {
@@ -619,6 +732,8 @@ const MermaidEditor = () => {
       selectionCheckInProgressRef.current = true;
 
       try {
+        fetchPageDimensions().catch(() => {});
+
         const mermaidCode = await getSelectedImageAltText();
         if (!isMounted) {
           return;
@@ -703,7 +818,7 @@ const MermaidEditor = () => {
       removeSelectionChangedHandler();
       selectionCheckInProgressRef.current = false;
     };
-  }, []);
+  }, [fetchPageDimensions]);
 
 
   const handleCodeChange = (newCode) => {
