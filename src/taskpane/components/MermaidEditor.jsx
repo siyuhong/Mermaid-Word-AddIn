@@ -6,7 +6,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
 import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
-import { insertDiagram, getSelectedImageAltText } from "../taskpane";
+import { insertDiagram, getSelectedImageAltText, getDocumentPageDimensions } from "../taskpane";
 import { detectDiagramType, isGanttDiagram, isStateDiagram, isClassDiagram } from "../utils/diagramUtils";
 
 const DEFAULT_DIAGRAM = `flowchart LR
@@ -28,6 +28,185 @@ const CUSTOM_THEME = {
   secondary: "#50e6ff",
   background: "#ffffff",
   text: "#000000",
+};
+
+const DEFAULT_PAGE_WIDTH_POINTS = 612;
+const DEFAULT_PAGE_HEIGHT_POINTS = 792;
+const DEFAULT_MARGIN_POINTS = 72;
+const MIN_PREVIEW_SIZE_POINTS = 144;
+const POINTS_PER_INCH = 72;
+const DEFAULT_SCREEN_DPI = 96;
+
+const createDefaultPageDimensions = () => ({
+  pageWidth: DEFAULT_PAGE_WIDTH_POINTS,
+  pageHeight: DEFAULT_PAGE_HEIGHT_POINTS,
+  marginLeft: DEFAULT_MARGIN_POINTS,
+  marginRight: DEFAULT_MARGIN_POINTS,
+  marginTop: DEFAULT_MARGIN_POINTS,
+  marginBottom: DEFAULT_MARGIN_POINTS,
+});
+
+const DEFAULT_PAGE_DIMENSIONS = createDefaultPageDimensions();
+
+const getPixelsPerPoint = () => {
+  if (typeof window !== "undefined") {
+    const devicePixelRatio =
+      typeof window.devicePixelRatio === "number" &&
+      Number.isFinite(window.devicePixelRatio) &&
+      window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1;
+
+    return (DEFAULT_SCREEN_DPI * devicePixelRatio) / POINTS_PER_INCH;
+  }
+
+  return DEFAULT_SCREEN_DPI / POINTS_PER_INCH;
+};
+
+const DEFAULT_ASPECT_RATIO = 4 / 3;
+
+const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensions = DEFAULT_PAGE_DIMENSIONS) => {
+  const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
+  const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
+
+  const aspectRatio =
+    hasValidWidth && hasValidHeight && originalHeight !== 0
+      ? originalWidth / originalHeight
+      : DEFAULT_ASPECT_RATIO;
+
+  const availableWidth = Math.max(
+    pageDimensions.pageWidth -
+      pageDimensions.marginLeft -
+      pageDimensions.marginRight,
+    MIN_PREVIEW_SIZE_POINTS
+  );
+
+  const availableHeight = Math.max(
+    pageDimensions.pageHeight -
+      pageDimensions.marginTop -
+      pageDimensions.marginBottom,
+    MIN_PREVIEW_SIZE_POINTS
+  );
+
+  const maxUsableWidth = availableWidth * 0.85;
+  const maxUsableHeight = availableHeight * 0.85;
+
+  const availableAspectRatio = maxUsableWidth / maxUsableHeight;
+
+  let targetWidth;
+  let targetHeight;
+
+  if (aspectRatio > availableAspectRatio) {
+    targetWidth = maxUsableWidth;
+    targetHeight = targetWidth / aspectRatio;
+  } else {
+    targetHeight = maxUsableHeight;
+    targetWidth = targetHeight * aspectRatio;
+  }
+
+  if (targetWidth < MIN_PREVIEW_SIZE_POINTS && targetHeight < MIN_PREVIEW_SIZE_POINTS) {
+    if (aspectRatio >= 1) {
+      targetWidth = MIN_PREVIEW_SIZE_POINTS;
+      targetHeight = targetWidth / aspectRatio;
+    } else {
+      targetHeight = MIN_PREVIEW_SIZE_POINTS;
+      targetWidth = targetHeight * aspectRatio;
+    }
+  }
+
+  if (targetWidth > maxUsableWidth) {
+    targetWidth = maxUsableWidth;
+    targetHeight = targetWidth / aspectRatio;
+  }
+
+  if (targetHeight > maxUsableHeight) {
+    targetHeight = maxUsableHeight;
+    targetWidth = targetHeight * aspectRatio;
+  }
+
+  console.log("Preview calculated with page dimensions:", {
+    pageDimensions,
+    availableWidth,
+    availableHeight,
+    maxUsableWidth,
+    maxUsableHeight,
+    targetWidth: Math.round(targetWidth),
+    targetHeight: Math.round(targetHeight),
+  });
+
+  return {
+    width: Math.round(targetWidth),
+    height: Math.round(targetHeight),
+  };
+};
+
+const extractSvgDimensions = (svgElement) => {
+  if (!svgElement) {
+    return { width: 0, height: 0 };
+  }
+
+  try {
+    const viewBox = svgElement.getAttribute("viewBox");
+    if (viewBox) {
+      const viewBoxValues = viewBox.split(/\s+/).map(parseFloat);
+      if (viewBoxValues.length >= 4) {
+        const width = viewBoxValues[2];
+        const height = viewBoxValues[3];
+        if (
+          Number.isFinite(width) &&
+          Number.isFinite(height) &&
+          width > 0 &&
+          height > 0
+        ) {
+          return { width, height };
+        }
+      }
+    }
+
+    const widthAttr = svgElement.getAttribute("width");
+    const heightAttr = svgElement.getAttribute("height");
+
+    if (widthAttr && heightAttr) {
+      const width = parseFloat(widthAttr);
+      const height = parseFloat(heightAttr);
+      if (
+        Number.isFinite(width) &&
+        Number.isFinite(height) &&
+        width > 0 &&
+        height > 0
+      ) {
+        return { width, height };
+      }
+    }
+
+    if (svgElement.firstElementChild) {
+      const childWidthAttr = svgElement.firstElementChild.getAttribute("width");
+      const childHeightAttr = svgElement.firstElementChild.getAttribute("height");
+      if (childWidthAttr && childHeightAttr) {
+        const width = parseFloat(childWidthAttr);
+        const height = parseFloat(childHeightAttr);
+        if (
+          Number.isFinite(width) &&
+          Number.isFinite(height) &&
+          width > 0 &&
+          height > 0
+        ) {
+          return { width, height };
+        }
+      }
+    }
+
+    if (svgElement.getBBox) {
+      const bbox = svgElement.getBBox();
+      if (bbox && bbox.width && bbox.height) {
+        return { width: bbox.width, height: bbox.height };
+      }
+    }
+  } catch (error) {
+    console.log("Failed to extract SVG dimensions for preview:", error);
+  }
+
+  return { width: 800, height: 600 };
 };
 
 const useStyles = makeStyles({
@@ -72,50 +251,45 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     padding: "16px",
     minHeight: "240px",
-    overflowX: "hidden",
+    maxHeight: "400px",
+    overflowX: "auto",
     overflowY: "auto",
     boxSizing: "border-box",
-  },
-  previewContainerScrollable: {
-    overflowX: "auto",
-    overflowY: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   previewContent: {
     width: "100%",
+    maxWidth: "100%",
     overflow: "visible",
     boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     "& svg": {
       display: "block",
-    },
-  },
-  previewContentResponsive: {
-    "& svg": {
-      width: "100%",
       maxWidth: "100%",
       height: "auto",
     },
   },
   previewContentGantt: {
     "& svg": {
-      width: "auto",
       minWidth: "640px",
-      maxWidth: "none",
       height: "auto",
     },
   },
   previewContentStateDiagram: {
     "& svg": {
-      width: "100%",
       maxWidth: "380px",
-      margin: "0 auto",
+      width: "100%",
       height: "auto",
     },
   },
   previewContentClassDiagram: {
     "& svg": {
-      width: "100%",
       maxWidth: "600px",
-      margin: "0 auto",
+      width: "100%",
       height: "auto",
     },
   },
@@ -161,14 +335,192 @@ const MermaidEditor = () => {
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const [diagramType, setDiagramType] = React.useState("");
+  const [pageDimensions, setPageDimensions] = React.useState(() => ({ ...DEFAULT_PAGE_DIMENSIONS }));
   const previewRef = React.useRef(null);
+  const previewContainerRef = React.useRef(null);
+  const previewAnimationFrameRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
   const debounceTimerRef = React.useRef(null);
   const selectionCheckInProgressRef = React.useRef(false);
   const resizeTimerRef = React.useRef(null);
+  const pageDimensionsRef = React.useRef({ ...DEFAULT_PAGE_DIMENSIONS });
+  const pageDimensionsRequestRef = React.useRef(false);
+  const lastPageDimensionsUpdateRef = React.useRef(0);
+
+  const clearPreviewAnimationFrame = React.useCallback(() => {
+    if (previewAnimationFrameRef.current) {
+      cancelAnimationFrame(previewAnimationFrameRef.current);
+      previewAnimationFrameRef.current = null;
+    }
+  }, []);
+
+  const fetchPageDimensions = React.useCallback(async () => {
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastPageDimensionsUpdateRef.current;
+
+    if (pageDimensionsRequestRef.current) {
+      return pageDimensionsRef.current;
+    }
+
+    if (timeSinceLastUpdate < 2000) {
+      return pageDimensionsRef.current;
+    }
+
+    try {
+      pageDimensionsRequestRef.current = true;
+      console.log("Fetching page dimensions from Word document...");
+      
+      const dims = await getDocumentPageDimensions();
+      
+      if (dims && typeof dims === "object") {
+        const ensurePositive = (value, minValue, fallback) =>
+          typeof value === "number" && Number.isFinite(value) && value > minValue ? value : fallback;
+
+        const ensureNonNegative = (value, fallback) =>
+          typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
+
+        const normalizedDims = {
+          pageWidth: ensurePositive(dims.pageWidth, 0, DEFAULT_PAGE_WIDTH_POINTS),
+          pageHeight: ensurePositive(dims.pageHeight, 0, DEFAULT_PAGE_HEIGHT_POINTS),
+          marginLeft: ensureNonNegative(dims.marginLeft, DEFAULT_MARGIN_POINTS),
+          marginRight: ensureNonNegative(dims.marginRight, DEFAULT_MARGIN_POINTS),
+          marginTop: ensureNonNegative(dims.marginTop, DEFAULT_MARGIN_POINTS),
+          marginBottom: ensureNonNegative(dims.marginBottom, DEFAULT_MARGIN_POINTS),
+        };
+
+        pageDimensionsRef.current = normalizedDims;
+        lastPageDimensionsUpdateRef.current = now;
+        
+        setPageDimensions((prev) => {
+          if (
+            prev.pageWidth !== normalizedDims.pageWidth ||
+            prev.pageHeight !== normalizedDims.pageHeight ||
+            prev.marginLeft !== normalizedDims.marginLeft ||
+            prev.marginRight !== normalizedDims.marginRight ||
+            prev.marginTop !== normalizedDims.marginTop ||
+            prev.marginBottom !== normalizedDims.marginBottom
+          ) {
+            console.log("Page dimensions updated:", normalizedDims);
+            return normalizedDims;
+          }
+          return prev;
+        });
+
+        return normalizedDims;
+      }
+    } catch (error) {
+      console.log("Failed to fetch page dimensions, using cached/default:", error);
+    } finally {
+      pageDimensionsRequestRef.current = false;
+    }
+
+    return pageDimensionsRef.current;
+  }, [setPageDimensions]);
+
+  const resetPreviewSizing = React.useCallback(() => {
+    clearPreviewAnimationFrame();
+
+    if (previewRef.current) {
+      previewRef.current.style.width = "100%";
+      previewRef.current.style.maxWidth = "100%";
+      previewRef.current.style.minWidth = "auto";
+      previewRef.current.style.display = "";
+      previewRef.current.style.justifyContent = "";
+      previewRef.current.style.alignItems = "";
+    }
+
+    if (previewContainerRef.current) {
+      previewContainerRef.current.scrollTop = 0;
+      previewContainerRef.current.scrollLeft = 0;
+    }
+  }, [clearPreviewAnimationFrame]);
+
+  const applyPreviewSizing = React.useCallback(() => {
+    if (!previewRef.current || !previewContainerRef.current) {
+      return;
+    }
+
+    const svgElement = previewRef.current.querySelector("svg");
+    if (!svgElement) {
+      resetPreviewSizing();
+      return;
+    }
+
+    svgElement.removeAttribute("width");
+    svgElement.removeAttribute("height");
+
+    const { width: svgWidth, height: svgHeight } = extractSvgDimensions(svgElement);
+    if (!Number.isFinite(svgWidth) || !Number.isFinite(svgHeight) || svgWidth <= 0 || svgHeight <= 0) {
+      resetPreviewSizing();
+      return;
+    }
+
+    const currentPageDims = pageDimensionsRef.current;
+    const optimalSizePoints = calculatePreviewDisplaySize(svgWidth, svgHeight, currentPageDims);
+
+    const pixelsPerPoint = getPixelsPerPoint();
+    let targetWidthPx = Math.max(1, Math.round(optimalSizePoints.width * pixelsPerPoint));
+    let targetHeightPx = Math.max(1, Math.round(optimalSizePoints.height * pixelsPerPoint));
+
+    const containerElement = previewContainerRef.current;
+    const containerRect = containerElement.getBoundingClientRect();
+    const containerWidth = containerRect.width || containerElement.clientWidth || containerElement.offsetWidth || 0;
+    const containerHeight = containerRect.height || containerElement.clientHeight || containerElement.offsetHeight || 0;
+
+    let horizontalPadding = 0;
+    let verticalPadding = 0;
+
+    if (typeof window !== "undefined" && containerElement) {
+      const computedStyle = window.getComputedStyle(containerElement);
+      horizontalPadding =
+        (parseFloat(computedStyle.paddingLeft) || 0) +
+        (parseFloat(computedStyle.paddingRight) || 0);
+      verticalPadding =
+        (parseFloat(computedStyle.paddingTop) || 0) +
+        (parseFloat(computedStyle.paddingBottom) || 0);
+    }
+
+    const availableWidth = Math.max(containerWidth - horizontalPadding, 1);
+    const availableHeight = Math.max(containerHeight - verticalPadding, 1);
+
+    let scale = 1;
+
+    if (targetWidthPx > availableWidth && availableWidth > 0) {
+      scale = Math.min(scale, availableWidth / targetWidthPx);
+    }
+
+    if (targetHeightPx > availableHeight && availableHeight > 0) {
+      scale = Math.min(scale, availableHeight / targetHeightPx);
+    }
+
+    if (!Number.isFinite(scale) || scale <= 0) {
+      scale = 1;
+    }
+
+    if (scale < 1) {
+      targetWidthPx = Math.max(1, Math.round(targetWidthPx * scale));
+      targetHeightPx = Math.max(1, Math.round(targetHeightPx * scale));
+    }
+
+    svgElement.style.width = `${targetWidthPx}px`;
+    svgElement.style.height = `${targetHeightPx}px`;
+    svgElement.style.maxWidth = `${targetWidthPx}px`;
+    svgElement.style.maxHeight = `${targetHeightPx}px`;
+
+    previewRef.current.style.width = `${targetWidthPx}px`;
+    previewRef.current.style.maxWidth = "100%";
+    previewRef.current.style.minWidth = "auto";
+  }, [resetPreviewSizing]);
+
+  const schedulePreviewSizing = React.useCallback(() => {
+    clearPreviewAnimationFrame();
+    previewAnimationFrameRef.current = requestAnimationFrame(() => {
+      applyPreviewSizing();
+    });
+  }, [applyPreviewSizing, clearPreviewAnimationFrame]);
 
   // Initialize Mermaid configuration once
-  const mermaidConfig = {
+  const mermaidConfig = React.useMemo(() => ({
     startOnLoad: false,
     securityLevel: "strict",
     suppressErrorRendering: true,
@@ -176,13 +528,13 @@ const MermaidEditor = () => {
     fontFamily: "Arial, sans-serif",
     fontSize: 16,
     flowchart: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       htmlLabels: true,
       curve: "basis",
       padding: 20
     },
     sequence: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       wrap: true,
       boxMargin: 10,
       boxTextMargin: 5,
@@ -204,15 +556,15 @@ const MermaidEditor = () => {
       bottomPadding: 30
     },
     classDiagram: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       padding: 20
     },
     state: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       padding: 20
     },
     stateDiagram: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       padding: 20
     },
     stateDiagramV2: {
@@ -221,21 +573,40 @@ const MermaidEditor = () => {
       maxWidth: 480
     },
     pie: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       textPosition: 0.75,
       pieStrokeWidth: 2,
       pieOuterStrokeWidth: 2,
       pieInnerStrokeWidth: 2
     },
     journey: {
-      useMaxWidth: false,
+      useMaxWidth: true,
       padding: 20,
       boxMargin: 10,
       boxTextMargin: 5,
       leftMargin: 100,
       rightMargin: 100
+    },
+    er: {
+      useMaxWidth: true,
+      padding: 20
+    },
+    mindmap: {
+      useMaxWidth: true,
+      padding: 20
+    },
+    timeline: {
+      useMaxWidth: true,
+      padding: 20
+    },
+    gitGraph: {
+      useMaxWidth: true
     }
-  };
+  }), [theme]);
+
+  React.useEffect(() => {
+    fetchPageDimensions();
+  }, [fetchPageDimensions]);
 
   React.useEffect(() => {
     console.log("Initializing Mermaid with theme:", theme);
@@ -245,7 +616,7 @@ const MermaidEditor = () => {
     } catch (error) {
       console.error("Error initializing Mermaid:", error);
     }
-  }, [theme]);
+  }, [theme, mermaidConfig]);
 
   React.useEffect(() => {
     let isActive = true;
@@ -254,6 +625,8 @@ const MermaidEditor = () => {
       if (!previewRef.current) {
         return;
       }
+
+      await fetchPageDimensions();
 
       try {
         // First validate the Mermaid syntax
@@ -266,6 +639,7 @@ const MermaidEditor = () => {
 
         console.error("Mermaid parse error:", err);
         previewRef.current.innerHTML = "";
+        resetPreviewSizing();
         setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
         setCanInsert(false);
         setDiagramType("");
@@ -286,6 +660,8 @@ const MermaidEditor = () => {
         setError("");
         setCanInsert(true);
         setDiagramType(detectDiagramType(code));
+
+        schedulePreviewSizing();
       } catch (err) {
         if (!isActive) {
           return;
@@ -295,6 +671,7 @@ const MermaidEditor = () => {
         if (previewRef.current) {
           previewRef.current.innerHTML = "";
         }
+        resetPreviewSizing();
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setCanInsert(false);
@@ -317,7 +694,7 @@ const MermaidEditor = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [code, theme]);
+  }, [code, theme, schedulePreviewSizing, resetPreviewSizing, fetchPageDimensions]);
 
   // Handle window resize to re-render diagram with new dimensions
   React.useEffect(() => {
@@ -333,6 +710,7 @@ const MermaidEditor = () => {
             const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
             const { svg } = await mermaid.render(renderId, code);
             previewRef.current.innerHTML = svg;
+            schedulePreviewSizing();
           } catch (err) {
             console.log("Error re-rendering on resize:", err);
           }
@@ -348,7 +726,11 @@ const MermaidEditor = () => {
         clearTimeout(resizeTimerRef.current);
       }
     };
-  }, [code]);
+  }, [code, schedulePreviewSizing]);
+
+  React.useEffect(() => () => {
+    clearPreviewAnimationFrame();
+  }, [clearPreviewAnimationFrame]);
 
   // Check for selected images when component mounts or when selection might change
   React.useEffect(() => {
@@ -365,6 +747,8 @@ const MermaidEditor = () => {
       selectionCheckInProgressRef.current = true;
 
       try {
+        fetchPageDimensions().catch(() => {});
+
         const mermaidCode = await getSelectedImageAltText();
         if (!isMounted) {
           return;
@@ -449,7 +833,7 @@ const MermaidEditor = () => {
       removeSelectionChangedHandler();
       selectionCheckInProgressRef.current = false;
     };
-  }, []);
+  }, [fetchPageDimensions]);
 
 
   const handleCodeChange = (newCode) => {
@@ -491,14 +875,11 @@ const MermaidEditor = () => {
     setError(""); // Clear any previous errors
   };
 
-  const previewContainerClassName = mergeClasses(
-    styles.previewContainer,
-    isGanttDiagram(diagramType) ? styles.previewContainerScrollable : undefined
-  );
+  const previewContainerClassName = styles.previewContainer;
 
   const previewContentClassName = mergeClasses(
     styles.previewContent,
-    isGanttDiagram(diagramType) ? styles.previewContentGantt : styles.previewContentResponsive,
+    isGanttDiagram(diagramType) ? styles.previewContentGantt : undefined,
     isStateDiagram(diagramType) ? styles.previewContentStateDiagram : undefined,
     isClassDiagram(diagramType) ? styles.previewContentClassDiagram : undefined
   );
@@ -548,7 +929,7 @@ const MermaidEditor = () => {
               <Option value="neutral">Neutral</Option>
             </Dropdown>
           </div>
-          <div className={previewContainerClassName}>
+          <div ref={previewContainerRef} className={previewContainerClassName}>
             <div ref={previewRef} className={previewContentClassName} />
           </div>
         </div>
