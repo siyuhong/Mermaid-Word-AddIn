@@ -271,7 +271,7 @@ function calculateDiagramDisplaySize(
 
   const DEFAULT_ASPECT_RATIO = 4 / 3;
 
-  const aspectRatio =
+  const svgAspectRatio =
     hasValidWidth && hasValidHeight && originalHeight !== 0
       ? originalWidth / originalHeight
       : DEFAULT_ASPECT_RATIO;
@@ -290,78 +290,42 @@ function calculateDiagramDisplaySize(
     MIN_DIAGRAM_SIZE_POINTS
   );
 
-  const isGantt = isGanttDiagram(diagramType);
-  const isState = isStateDiagram(diagramType);
+  console.log("Available space (points):", availableWidth, "x", availableHeight);
+  console.log("SVG aspect ratio:", svgAspectRatio);
 
-  const preferredWidthRatio = isGantt ? 0.95 : isState ? 0.6 : 0.85;
-  const minimumWidthRatio = isGantt ? 0.75 : isState ? 0.4 : 0.55;
+  const availableAspectRatio = availableWidth / availableHeight;
 
-  const preferredWidthLimit = Math.min(
-    availableWidth,
-    Math.max(MIN_DIAGRAM_SIZE_POINTS, availableWidth * preferredWidthRatio)
-  );
+  let targetWidth, targetHeight;
 
-  const minimumWidthLimit = Math.min(
-    availableWidth,
-    Math.max(MIN_DIAGRAM_SIZE_POINTS, availableWidth * minimumWidthRatio)
-  );
-
-  let targetWidth = preferredWidthLimit;
-  let targetHeight = targetWidth / aspectRatio;
-
-  if (targetHeight > availableHeight) {
-    targetHeight = availableHeight;
-    targetWidth = targetHeight * aspectRatio;
-  }
-
-  if (targetWidth > preferredWidthLimit) {
-    targetWidth = preferredWidthLimit;
-    targetHeight = targetWidth / aspectRatio;
-  }
-
-  if (targetWidth < minimumWidthLimit) {
-    targetWidth = minimumWidthLimit;
-    targetHeight = targetWidth / aspectRatio;
-  }
-
-  if (targetHeight > availableHeight) {
-    targetHeight = availableHeight;
-    targetWidth = targetHeight * aspectRatio;
-  }
-
-  if (targetHeight < MIN_DIAGRAM_SIZE_POINTS) {
-    targetHeight = MIN_DIAGRAM_SIZE_POINTS;
-    targetWidth = targetHeight * aspectRatio;
-  }
-
-  if (targetWidth > availableWidth) {
+  if (svgAspectRatio > availableAspectRatio) {
+    // SVG is wider relative to available space - fit to width
     targetWidth = availableWidth;
-    targetHeight = targetWidth / aspectRatio;
-  }
-
-  if (targetHeight > availableHeight) {
+    targetHeight = targetWidth / svgAspectRatio;
+    console.log("Fitting to width");
+  } else {
+    // SVG is taller relative to available space - fit to height
     targetHeight = availableHeight;
-    targetWidth = targetHeight * aspectRatio;
+    targetWidth = targetHeight * svgAspectRatio;
+    console.log("Fitting to height");
   }
 
+  // Ensure minimum size (at least 2 inches wide or tall)
   if (targetWidth < MIN_DIAGRAM_SIZE_POINTS && targetHeight < MIN_DIAGRAM_SIZE_POINTS) {
-    if (aspectRatio >= 1) {
+    if (svgAspectRatio >= 1) {
       targetWidth = MIN_DIAGRAM_SIZE_POINTS;
-      targetHeight = targetWidth / aspectRatio;
+      targetHeight = targetWidth / svgAspectRatio;
     } else {
       targetHeight = MIN_DIAGRAM_SIZE_POINTS;
-      targetWidth = targetHeight * aspectRatio;
+      targetWidth = targetHeight * svgAspectRatio;
     }
+    console.log("Applied minimum size constraint");
   }
-
-  targetWidth = Math.max(Math.min(targetWidth, availableWidth), MIN_DIAGRAM_SIZE_POINTS);
-  targetHeight = Math.max(Math.min(targetHeight, availableHeight), MIN_DIAGRAM_SIZE_POINTS);
 
   console.log("Calculated diagram display size (points):", {
     diagramType,
     targetWidth,
     targetHeight,
-    aspectRatio,
+    svgAspectRatio,
     availableWidth,
     availableHeight,
   });
