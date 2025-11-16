@@ -5,6 +5,8 @@ import { makeStyles } from "@fluentui/react-components";
 const useStyles = makeStyles({
   root: {
     minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
   },
 });
 
