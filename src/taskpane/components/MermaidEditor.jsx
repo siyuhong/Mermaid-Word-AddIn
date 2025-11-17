@@ -10,6 +10,11 @@ import {
   tokens,
   Dropdown,
   Option,
+  SplitButton,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
 } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
@@ -892,7 +897,7 @@ const MermaidEditor = () => {
     }
   };
 
-  const handleInsertDiagram = async () => {
+  const handleInsertDiagram = async (format = null) => {
     if (!canInsert || !previewRef.current) {
       return;
     }
@@ -900,7 +905,8 @@ const MermaidEditor = () => {
     try {
       setError(""); // Clear any previous errors
       const svgContent = previewRef.current.innerHTML;
-      await insertDiagram(svgContent, code, insertFormat);
+      const selectedFormat = format !== null ? format : insertFormat;
+      await insertDiagram(svgContent, code, selectedFormat);
     } catch (err) {
       console.error("Insert diagram error:", err);
       const errorMessage = err?.message || "Failed to insert diagram into Word.";
@@ -999,9 +1005,34 @@ const MermaidEditor = () => {
         <Button appearance="secondary" onClick={handleEditDiagram} disabled={!hasSelectedImage}>
           Edit Selected
         </Button>
-        <Button appearance="primary" onClick={handleInsertDiagram} disabled={!canInsert}>
-          Insert to Word
-        </Button>
+        <MenuTrigger setOpen={() => {}}>
+          <SplitButton
+            appearance="primary"
+            disabled={!canInsert}
+            onClick={handleInsertDiagram}
+            menuButton={{ disabled: !canInsert }}
+          >
+            Insert to Word ({insertFormat.toUpperCase()})
+          </SplitButton>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem
+                onClick={async () => {
+                  await handleInsertDiagram("png");
+                }}
+              >
+                Insert as PNG
+              </MenuItem>
+              <MenuItem
+                onClick={async () => {
+                  await handleInsertDiagram("svg");
+                }}
+              >
+                Insert as SVG
+              </MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </MenuTrigger>
       </div>
       {error && (
         <div role="alert" className={styles.error}>

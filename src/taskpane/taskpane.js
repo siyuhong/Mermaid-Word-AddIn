@@ -579,11 +579,17 @@ async function insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize) {
   // Prepare SVG content with embedded metadata for re-editing
   let enhancedSvgContent = svgContent;
 
-  // Ensure SVG has proper namespace
+  // Ensure SVG has proper namespace and SVG 1.0 version for Word compatibility
   if (!enhancedSvgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
     enhancedSvgContent = enhancedSvgContent.replace(
       "<svg",
-      '<svg xmlns="http://www.w3.org/2000/svg"'
+      '<svg xmlns="http://www.w3.org/2000/svg" version="1.0"'
+    );
+  } else if (!enhancedSvgContent.includes('version="1.0"')) {
+    // Add version attribute if xmlns exists but version doesn't
+    enhancedSvgContent = enhancedSvgContent.replace(
+      /(<svg[^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg")/,
+      '$1 version="1.0"'
     );
   }
 
