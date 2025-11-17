@@ -541,22 +541,18 @@ export async function insertDiagram(svgContent, mermaidCode, format = "png") {
     );
     console.log("Calculated target display size (points):", targetDisplaySize);
 
-    if (format === "svg") {
-      // Insert SVG directly
-      await insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize);
-    } else {
-      // Insert PNG (default behavior)
-      await insertPngDiagram(
-        svgContent,
-        mermaidCode,
-        diagramType,
-        { width: svgWidth, height: svgHeight },
-        targetDisplaySize,
-        pageDimensions
-      );
-    }
+    // Always insert as PNG for SVG 1.0 compatibility
+    // SVG format does not support inline writing methods required for metadata embedding
+    await insertPngDiagram(
+      svgContent,
+      mermaidCode,
+      diagramType,
+      { width: svgWidth, height: svgHeight },
+      targetDisplaySize,
+      pageDimensions
+    );
 
-    console.log("Diagram successfully inserted into Word as", format.toUpperCase());
+    console.log("Diagram successfully inserted into Word as PNG");
   } catch (error) {
     console.error("Error inserting diagram:", error);
 
@@ -573,80 +569,6 @@ export async function insertDiagram(svgContent, mermaidCode, format = "png") {
 
     throw new Error(errorMessage);
   }
-}
-
-async function insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize) {
-  // Prepare SVG content with embedded metadata for re-editing
-  let enhancedSvgContent = svgContent;
-
-  // Ensure SVG has proper namespace
-  if (!enhancedSvgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
-    enhancedSvgContent = enhancedSvgContent.replace(
-      "<svg",
-      '<svg xmlns="http://www.w3.org/2000/svg"'
-    );
-  }
-
-  // Set width and height attributes based on calculated display size (in points)
-  const width = Math.round(targetDisplaySize.width);
-  const height = Math.round(targetDisplaySize.height);
-
-  // Remove existing width/height attributes and add new ones
-  enhancedSvgContent = enhancedSvgContent.replace(/width\s*=\s*["'][^"']*["']/g, "");
-  enhancedSvgContent = enhancedSvgContent.replace(/height\s*=\s*["'][^"']*["']/g, "");
-
-  // Add width and height attributes after the svg tag
-  const svgTagMatch = enhancedSvgContent.match(/<svg[^>]*>/);
-  if (svgTagMatch) {
-    const svgTag = svgTagMatch[0];
-    const newSvgTag = svgTag.replace(">", ` width="${width}" height="${height}">`);
-    enhancedSvgContent = enhancedSvgContent.replace(svgTag, newSvgTag);
-  }
-
-  // Embed Mermaid code in SVG metadata for re-editing capability
-  const mermaidCodeEscaped = mermaidCode
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-  const descElement = `<desc title="Mermaid Diagram">${mermaidCodeEscaped}</desc>`;
-
-  // Insert desc element after opening svg tag if not already present
-  if (!enhancedSvgContent.includes("<desc")) {
-    enhancedSvgContent = enhancedSvgContent.replace(/(<svg[^>]*>)/, `$1${descElement}`);
-  } else {
-    // Update existing desc element
-    enhancedSvgContent = enhancedSvgContent.replace(/<desc[^>]*>[^<]*<\/desc>/, descElement);
-  }
-
-  // Convert SVG to base64
-  const svgBase64 = btoa(unescape(encodeURIComponent(enhancedSvgContent)));
-
-  await Word.run(async (context) => {
-    try {
-      // Get the current selection to insert at cursor position
-      const selection = context.document.getSelection();
-
-      // Insert SVG as base64 encoded image
-      const image = selection.insertInlinePictureFromBase64(svgBase64, Word.InsertLocation.replace);
-
-      // Set alt text for accessibility and to preserve Mermaid code for re-editing
-      image.altTextTitle = "Mermaid Diagram";
-      image.altTextDescription = mermaidCode;
-
-      // Set image size to calculated display dimensions (in points)
-      image.width = width;
-      image.height = height;
-
-      await context.sync();
-      console.log("SVG diagram successfully inserted into Word");
-    } catch (error) {
-      console.error("Error inserting SVG diagram:", error);
-      throw new Error(`Failed to insert SVG diagram: ${error.message || error}`);
-    }
-  });
 }
 
 async function insertPngDiagram(

@@ -353,7 +353,6 @@ const MermaidEditor = () => {
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const [diagramType, setDiagramType] = React.useState("");
-  const [insertFormat, setInsertFormat] = React.useState("png");
   const [pageDimensions, setPageDimensions] = React.useState(() => ({
     ...DEFAULT_PAGE_DIMENSIONS,
   }));
@@ -880,10 +879,6 @@ const MermaidEditor = () => {
     setTheme(data.optionValue || "default");
   };
 
-  const handleFormatChange = (event, data) => {
-    setInsertFormat(data.optionValue || "png");
-  };
-
   const handleEditDiagram = () => {
     if (selectedImageCode) {
       setCode(selectedImageCode);
@@ -900,7 +895,7 @@ const MermaidEditor = () => {
     try {
       setError(""); // Clear any previous errors
       const svgContent = previewRef.current.innerHTML;
-      await insertDiagram(svgContent, code, insertFormat);
+      await insertDiagram(svgContent, code, "png");
     } catch (err) {
       console.error("Insert diagram error:", err);
       const errorMessage = err?.message || "Failed to insert diagram into Word.";
@@ -978,15 +973,6 @@ const MermaidEditor = () => {
                 <Option value="dark">Dark</Option>
                 <Option value="forest">Forest</Option>
                 <Option value="neutral">Neutral</Option>
-              </Dropdown>
-              <Dropdown
-                className={styles.themeSelector}
-                value={insertFormat}
-                onOptionSelect={handleFormatChange}
-                aria-label="Insert format"
-              >
-                <Option value="png">PNG</Option>
-                <Option value="svg">SVG</Option>
               </Dropdown>
             </div>
           </div>
