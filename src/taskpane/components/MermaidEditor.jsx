@@ -353,6 +353,7 @@ const MermaidEditor = () => {
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const [diagramType, setDiagramType] = React.useState("");
+  const [insertFormat, setInsertFormat] = React.useState("png");
   const [pageDimensions, setPageDimensions] = React.useState(() => ({
     ...DEFAULT_PAGE_DIMENSIONS,
   }));
@@ -879,6 +880,10 @@ const MermaidEditor = () => {
     setTheme(data.optionValue || "default");
   };
 
+  const handleFormatChange = (event, data) => {
+    setInsertFormat(data.optionValue || "png");
+  };
+
   const handleEditDiagram = () => {
     if (selectedImageCode) {
       setCode(selectedImageCode);
@@ -895,7 +900,7 @@ const MermaidEditor = () => {
     try {
       setError(""); // Clear any previous errors
       const svgContent = previewRef.current.innerHTML;
-      await insertDiagram(svgContent, code);
+      await insertDiagram(svgContent, code, insertFormat);
     } catch (err) {
       console.error("Insert diagram error:", err);
       const errorMessage = err?.message || "Failed to insert diagram into Word.";
@@ -962,17 +967,28 @@ const MermaidEditor = () => {
             <Text size="300" weight="semibold">
               Preview
             </Text>
-            <Dropdown
-              className={styles.themeSelector}
-              value={theme}
-              onOptionSelect={handleThemeChange}
-              aria-label="Mermaid theme"
-            >
-              <Option value="default">Default</Option>
-              <Option value="dark">Dark</Option>
-              <Option value="forest">Forest</Option>
-              <Option value="neutral">Neutral</Option>
-            </Dropdown>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Dropdown
+                className={styles.themeSelector}
+                value={theme}
+                onOptionSelect={handleThemeChange}
+                aria-label="Mermaid theme"
+              >
+                <Option value="default">Default</Option>
+                <Option value="dark">Dark</Option>
+                <Option value="forest">Forest</Option>
+                <Option value="neutral">Neutral</Option>
+              </Dropdown>
+              <Dropdown
+                className={styles.themeSelector}
+                value={insertFormat}
+                onOptionSelect={handleFormatChange}
+                aria-label="Insert format"
+              >
+                <Option value="png">PNG</Option>
+                <Option value="svg">SVG</Option>
+              </Dropdown>
+            </div>
           </div>
           <div ref={previewContainerRef} className={previewContainerClassName}>
             <div ref={previewRef} className={previewContentClassName} />

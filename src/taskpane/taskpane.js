@@ -496,10 +496,10 @@ export async function getSelectedImageAltText() {
   }
 }
 
-export async function insertDiagram(svgContent, mermaidCode) {
-  // Insert diagram as PNG with proper scaling for Word document
+export async function insertDiagram(svgContent, mermaidCode, format = "png") {
+  // Insert diagram as PNG or SVG with proper scaling for Word document
   try {
-    console.log("Starting diagram insertion with optimized sizing...");
+    console.log("Starting diagram insertion with format:", format);
     console.log("SVG content length:", svgContent.length);
 
     // Validate SVG content
@@ -541,50 +541,22 @@ export async function insertDiagram(svgContent, mermaidCode) {
     );
     console.log("Calculated target display size (points):", targetDisplaySize);
 
-    // Convert SVG to PNG with optimal sizing
-    const pngResult = await svgToBase64Png(
-      svgContent,
-      diagramType,
-      { width: svgWidth, height: svgHeight },
-      targetDisplaySize,
-      pageDimensions
-    );
-
-    const pngBase64 = pngResult?.base64;
-    const displayWidth = pngResult?.width;
-    const displayHeight = pngResult?.height;
-
-    console.log("PNG conversion successful, base64 length:", pngBase64?.length ?? 0);
-    console.log("Display dimensions (points):", { displayWidth, displayHeight });
-
-    if (!pngBase64 || typeof pngBase64 !== "string" || pngBase64.length === 0) {
-      throw new Error("Failed to convert SVG to PNG - invalid base64 output");
+    if (format === "svg") {
+      // Insert SVG directly
+      await insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize);
+    } else {
+      // Insert PNG (default behavior)
+      await insertPngDiagram(
+        svgContent,
+        mermaidCode,
+        diagramType,
+        { width: svgWidth, height: svgHeight },
+        targetDisplaySize,
+        pageDimensions
+      );
     }
 
-    if (
-      !Number.isFinite(displayWidth) ||
-      !Number.isFinite(displayHeight) ||
-      displayWidth <= 0 ||
-      displayHeight <= 0
-    ) {
-      throw new Error(`Invalid display dimensions: ${displayWidth}x${displayHeight}`);
-    }
-
-    await Word.run(async (context) => {
-      // Get the current selection to insert at cursor position
-      let selection = context.document.getSelection();
-      let image = selection.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.replace);
-
-      image.altTextTitle = "Mermaid Diagram";
-      image.altTextDescription = mermaidCode;
-
-      // Set image size to calculated display dimensions (in points)
-      image.width = Math.round(displayWidth);
-      image.height = Math.round(displayHeight);
-
-      await context.sync();
-      console.log("Diagram successfully inserted into Word with optimized sizing");
-    });
+    console.log("Diagram successfully inserted into Word as", format.toUpperCase());
   } catch (error) {
     console.error("Error inserting diagram:", error);
 
@@ -601,4 +573,114 @@ export async function insertDiagram(svgContent, mermaidCode) {
 
     throw new Error(errorMessage);
   }
+}
+
+async function insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize) {
+  // Prepare SVG content with proper dimensions
+  let fixedSvgContent = svgContent;
+
+  // Ensure SVG has proper namespace
+  if (!fixedSvgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
+    fixedSvgContent = fixedSvgContent.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+
+  // Set width and height attributes based on calculated display size (in points)
+  const width = Math.round(targetDisplaySize.width);
+  const height = Math.round(targetDisplaySize.height);
+
+  // Remove existing width/height attributes and add new ones
+  fixedSvgContent = fixedSvgContent.replace(/width\s*=\s*["'][^"']*["']/g, "");
+  fixedSvgContent = fixedSvgContent.replace(/height\s*=\s*["'][^"']*["']/g, "");
+
+  // Add width and height attributes after the svg tag
+  const svgTagMatch = fixedSvgContent.match(/<svg[^>]*>/);
+  if (svgTagMatch) {
+    const svgTag = svgTagMatch[0];
+    const newSvgTag = svgTag.replace(">", ` width="${width}" height="${height}">`);
+    fixedSvgContent = fixedSvgContent.replace(svgTag, newSvgTag);
+  }
+
+  // Convert SVG to base64
+  const svgBase64 = btoa(unescape(encodeURIComponent(fixedSvgContent)));
+
+  await Word.run(async (context) => {
+    try {
+      // Get the current selection to insert at cursor position
+      let selection = context.document.getSelection();
+
+      // Insert SVG as base64 encoded image
+      let image = selection.insertInlinePictureFromBase64(svgBase64, Word.InsertLocation.replace);
+
+      image.altTextTitle = "Mermaid Diagram";
+      image.altTextDescription = mermaidCode;
+
+      // Set image size to calculated display dimensions (in points)
+      image.width = width;
+      image.height = height;
+
+      await context.sync();
+      console.log("SVG diagram successfully inserted into Word");
+    } catch (error) {
+      console.error("Error inserting SVG diagram:", error);
+      // If SVG insertion fails, fall back to PNG
+      console.log("Falling back to PNG format due to SVG insertion error");
+      throw new Error(
+        "SVG insertion not supported in this version of Word. Please use PNG format instead."
+      );
+    }
+  });
+}
+
+async function insertPngDiagram(
+  svgContent,
+  mermaidCode,
+  diagramType,
+  svgDimensions,
+  targetDisplaySize,
+  pageDimensions
+) {
+  // Convert SVG to PNG with optimal sizing
+  const pngResult = await svgToBase64Png(
+    svgContent,
+    diagramType,
+    svgDimensions,
+    targetDisplaySize,
+    pageDimensions
+  );
+
+  const pngBase64 = pngResult?.base64;
+  const displayWidth = pngResult?.width;
+  const displayHeight = pngResult?.height;
+
+  console.log("PNG conversion successful, base64 length:", pngBase64?.length ?? 0);
+  console.log("Display dimensions (points):", { displayWidth, displayHeight });
+
+  if (!pngBase64 || typeof pngBase64 !== "string" || pngBase64.length === 0) {
+    throw new Error("Failed to convert SVG to PNG - invalid base64 output");
+  }
+
+  if (
+    !Number.isFinite(displayWidth) ||
+    !Number.isFinite(displayHeight) ||
+    displayWidth <= 0 ||
+    displayHeight <= 0
+  ) {
+    throw new Error(`Invalid display dimensions: ${displayWidth}x${displayHeight}`);
+  }
+
+  await Word.run(async (context) => {
+    // Get the current selection to insert at cursor position
+    let selection = context.document.getSelection();
+    let image = selection.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.replace);
+
+    image.altTextTitle = "Mermaid Diagram";
+    image.altTextDescription = mermaidCode;
+
+    // Set image size to calculated display dimensions (in points)
+    image.width = Math.round(displayWidth);
+    image.height = Math.round(displayHeight);
+
+    await context.sync();
+    console.log("PNG diagram successfully inserted into Word");
+  });
 }
