@@ -11,6 +11,7 @@ import {
   Dropdown,
   Option,
   SplitButton,
+  Menu,
   MenuTrigger,
   MenuPopover,
   MenuList,
@@ -1005,15 +1006,17 @@ const MermaidEditor = () => {
         <Button appearance="secondary" onClick={handleEditDiagram} disabled={!hasSelectedImage}>
           Edit Selected
         </Button>
-        <MenuTrigger setOpen={() => {}}>
-          <SplitButton
-            appearance="primary"
-            disabled={!canInsert}
-            onClick={handleInsertDiagram}
-            menuButton={{ disabled: !canInsert }}
-          >
-            Insert to Word ({insertFormat.toUpperCase()})
-          </SplitButton>
+        <Menu>
+          <MenuTrigger>
+            <SplitButton
+              appearance="primary"
+              disabled={!canInsert}
+              onClick={handleInsertDiagram}
+              menuButton={{ disabled: !canInsert }}
+            >
+              Insert to Word ({insertFormat.toUpperCase()})
+            </SplitButton>
+          </MenuTrigger>
           <MenuPopover>
             <MenuList>
               <MenuItem
@@ -1032,7 +1035,7 @@ const MermaidEditor = () => {
               </MenuItem>
             </MenuList>
           </MenuPopover>
-        </MenuTrigger>
+        </Menu>
       </div>
       {error && (
         <div role="alert" className={styles.error}>
