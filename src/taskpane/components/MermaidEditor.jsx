@@ -556,7 +556,7 @@ const MermaidEditor = () => {
       suppressErrorRendering: true,
       theme: theme,
       fontFamily: "Arial, sans-serif",
-      fontSize: 18, // Increased from 16 for better readability
+      fontSize: 16, // Increased from 16 for better readability
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
@@ -572,20 +572,18 @@ const MermaidEditor = () => {
         messageMargin: 35,
       },
       gantt: {
-        useMaxWidth: false,
-        titleTopMargin: 35,
-        barHeight: 25,
-        fontSize: 14,
-        sectionFontSize: 14,
-        gridLineStartPadding: 45,
-        gridLineEndPadding: 45,
-        barGap: 6,
-        topPadding: 40,
-        leftPadding: 75,
-        rightPadding: 75,
-        bottomPadding: 40,
-        displayMode: "compact",
-        axisFormat: "%Y-%m-%d",
+      useMaxWidth: false,
+      titleTopMargin: 25,
+      barHeight: 20,
+      fontSize: 12,
+      sectionFontSize: 12,
+      gridLineStartPadding: 35,
+      gridLineEndPadding: 35,
+      barGap: 4,
+      topPadding: 30,
+      leftPadding: 50,
+      rightPadding: 50,
+      bottomPadding: 30
       },
       classDiagram: {
         useMaxWidth: true,
