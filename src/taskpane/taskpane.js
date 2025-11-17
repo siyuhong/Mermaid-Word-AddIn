@@ -576,28 +576,77 @@ export async function insertDiagram(svgContent, mermaidCode, format = "png") {
 }
 
 async function insertSvgDiagram(svgContent, mermaidCode, targetDisplaySize) {
-  // SVG format is not directly supported by Word's Office.js API for inline pictures
-  // Convert SVG to PNG instead for reliable rendering in Word
-  console.log("SVG format requested - converting to PNG for Word compatibility");
+  // Prepare SVG content with embedded metadata for re-editing
+  let enhancedSvgContent = svgContent;
 
-  // Get SVG dimensions for conversion
-  const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
+  // Ensure SVG has proper namespace
+  if (!enhancedSvgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
+    enhancedSvgContent = enhancedSvgContent.replace(
+      "<svg",
+      '<svg xmlns="http://www.w3.org/2000/svg"'
+    );
+  }
 
-  // Detect diagram type from Mermaid code
-  const diagramType = detectDiagramType(mermaidCode);
+  // Set width and height attributes based on calculated display size (in points)
+  const width = Math.round(targetDisplaySize.width);
+  const height = Math.round(targetDisplaySize.height);
 
-  // Get page dimensions for sizing
-  const pageDimensions = await getDocumentPageDimensions();
+  // Remove existing width/height attributes and add new ones
+  enhancedSvgContent = enhancedSvgContent.replace(/width\s*=\s*["'][^"']*["']/g, "");
+  enhancedSvgContent = enhancedSvgContent.replace(/height\s*=\s*["'][^"']*["']/g, "");
 
-  // Convert SVG to PNG and insert
-  await insertPngDiagram(
-    svgContent,
-    mermaidCode,
-    diagramType,
-    { width: svgWidth, height: svgHeight },
-    targetDisplaySize,
-    pageDimensions
-  );
+  // Add width and height attributes after the svg tag
+  const svgTagMatch = enhancedSvgContent.match(/<svg[^>]*>/);
+  if (svgTagMatch) {
+    const svgTag = svgTagMatch[0];
+    const newSvgTag = svgTag.replace(">", ` width="${width}" height="${height}">`);
+    enhancedSvgContent = enhancedSvgContent.replace(svgTag, newSvgTag);
+  }
+
+  // Embed Mermaid code in SVG metadata for re-editing capability
+  const mermaidCodeEscaped = mermaidCode
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  const descElement = `<desc title="Mermaid Diagram">${mermaidCodeEscaped}</desc>`;
+
+  // Insert desc element after opening svg tag if not already present
+  if (!enhancedSvgContent.includes("<desc")) {
+    enhancedSvgContent = enhancedSvgContent.replace(/(<svg[^>]*>)/, `$1${descElement}`);
+  } else {
+    // Update existing desc element
+    enhancedSvgContent = enhancedSvgContent.replace(/<desc[^>]*>[^<]*<\/desc>/, descElement);
+  }
+
+  // Convert SVG to base64
+  const svgBase64 = btoa(unescape(encodeURIComponent(enhancedSvgContent)));
+
+  await Word.run(async (context) => {
+    try {
+      // Get the current selection to insert at cursor position
+      const selection = context.document.getSelection();
+
+      // Insert SVG as base64 encoded image
+      const image = selection.insertInlinePictureFromBase64(svgBase64, Word.InsertLocation.replace);
+
+      // Set alt text for accessibility and to preserve Mermaid code for re-editing
+      image.altTextTitle = "Mermaid Diagram";
+      image.altTextDescription = mermaidCode;
+
+      // Set image size to calculated display dimensions (in points)
+      image.width = width;
+      image.height = height;
+
+      await context.sync();
+      console.log("SVG diagram successfully inserted into Word");
+    } catch (error) {
+      console.error("Error inserting SVG diagram:", error);
+      throw new Error(`Failed to insert SVG diagram: ${error.message || error}`);
+    }
+  });
 }
 
 async function insertPngDiagram(

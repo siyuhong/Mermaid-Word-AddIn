@@ -986,7 +986,7 @@ const MermaidEditor = () => {
                 aria-label="Insert format"
               >
                 <Option value="png">PNG</Option>
-                <Option value="svg">SVG (as PNG)</Option>
+                <Option value="svg">SVG</Option>
               </Dropdown>
             </div>
           </div>
