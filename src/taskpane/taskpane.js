@@ -293,9 +293,9 @@ function calculateDiagramDisplaySize(
   console.log("Available space (points):", availableWidth, "x", availableHeight);
   console.log("SVG aspect ratio:", svgAspectRatio);
 
-  // Use 85% of available space for better layout and prevent overflow
-  const maxUsableWidth = availableWidth * 0.85;
-  const maxUsableHeight = availableHeight * 0.85;
+  // Use 90% of available space for better layout and text readability
+  const maxUsableWidth = availableWidth * 0.9;
+  const maxUsableHeight = availableHeight * 0.9;
 
   const availableAspectRatio = maxUsableWidth / maxUsableHeight;
 
@@ -313,16 +313,17 @@ function calculateDiagramDisplaySize(
     console.log("Fitting to height (85% of available)");
   }
 
-  // Ensure minimum size (at least 2 inches wide or tall)
-  if (targetWidth < MIN_DIAGRAM_SIZE_POINTS && targetHeight < MIN_DIAGRAM_SIZE_POINTS) {
+  // Ensure minimum size for better text readability (at least 2.5 inches wide or tall)
+  const MIN_READABLE_SIZE_POINTS = 180; // 2.5 inches
+  if (targetWidth < MIN_READABLE_SIZE_POINTS && targetHeight < MIN_READABLE_SIZE_POINTS) {
     if (svgAspectRatio >= 1) {
-      targetWidth = MIN_DIAGRAM_SIZE_POINTS;
+      targetWidth = MIN_READABLE_SIZE_POINTS;
       targetHeight = targetWidth / svgAspectRatio;
     } else {
-      targetHeight = MIN_DIAGRAM_SIZE_POINTS;
+      targetHeight = MIN_READABLE_SIZE_POINTS;
       targetWidth = targetHeight * svgAspectRatio;
     }
-    console.log("Applied minimum size constraint");
+    console.log("Applied minimum readable size constraint");
   }
 
   // Ensure we don't exceed the available space even with minimum size

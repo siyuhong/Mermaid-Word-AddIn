@@ -38,7 +38,11 @@ const TextInsertion = (props) => {
 
   return (
     <div className={styles.textPromptAndInsertion}>
-      <Field className={styles.textAreaField} size="large" label="Enter text to be inserted into the document.">
+      <Field
+        className={styles.textAreaField}
+        size="large"
+        label="Enter text to be inserted into the document."
+      >
         <Textarea size="large" value={text} onChange={handleTextChange} />
       </Field>
       <Field className={styles.instructions}>Click the button to insert text.</Field>

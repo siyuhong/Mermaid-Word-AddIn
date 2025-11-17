@@ -1,13 +1,27 @@
 /* global Office */
 import * as React from "react";
 import mermaid from "mermaid";
-import { Field, Text, Button, makeStyles, mergeClasses, tokens, Dropdown, Option } from "@fluentui/react-components";
+import {
+  Field,
+  Text,
+  Button,
+  makeStyles,
+  mergeClasses,
+  tokens,
+  Dropdown,
+  Option,
+} from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
 import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
 import { insertDiagram, getSelectedImageAltText, getDocumentPageDimensions } from "../taskpane";
-import { detectDiagramType, isGanttDiagram, isStateDiagram, isClassDiagram } from "../utils/diagramUtils";
+import {
+  detectDiagramType,
+  isGanttDiagram,
+  isStateDiagram,
+  isClassDiagram,
+} from "../utils/diagramUtils";
 
 const DEFAULT_DIAGRAM = `flowchart LR
 A[Hard] -->|Text| B(Round)
@@ -65,7 +79,11 @@ const getPixelsPerPoint = () => {
 
 const DEFAULT_ASPECT_RATIO = 4 / 3;
 
-const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensions = DEFAULT_PAGE_DIMENSIONS) => {
+const calculatePreviewDisplaySize = (
+  originalWidth,
+  originalHeight,
+  pageDimensions = DEFAULT_PAGE_DIMENSIONS
+) => {
   const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
   const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
 
@@ -75,21 +93,18 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensio
       : DEFAULT_ASPECT_RATIO;
 
   const availableWidth = Math.max(
-    pageDimensions.pageWidth -
-      pageDimensions.marginLeft -
-      pageDimensions.marginRight,
+    pageDimensions.pageWidth - pageDimensions.marginLeft - pageDimensions.marginRight,
     MIN_PREVIEW_SIZE_POINTS
   );
 
   const availableHeight = Math.max(
-    pageDimensions.pageHeight -
-      pageDimensions.marginTop -
-      pageDimensions.marginBottom,
+    pageDimensions.pageHeight - pageDimensions.marginTop - pageDimensions.marginBottom,
     MIN_PREVIEW_SIZE_POINTS
   );
 
-  const maxUsableWidth = availableWidth * 0.85;
-  const maxUsableHeight = availableHeight * 0.85;
+  // Use 90% of available space for better text readability
+  const maxUsableWidth = availableWidth * 0.9;
+  const maxUsableHeight = availableHeight * 0.9;
 
   const availableAspectRatio = maxUsableWidth / maxUsableHeight;
 
@@ -104,16 +119,19 @@ const calculatePreviewDisplaySize = (originalWidth, originalHeight, pageDimensio
     targetWidth = targetHeight * aspectRatio;
   }
 
-  if (targetWidth < MIN_PREVIEW_SIZE_POINTS && targetHeight < MIN_PREVIEW_SIZE_POINTS) {
+  // Ensure minimum size for text readability (2.5 inches instead of 2 inches)
+  const MIN_READABLE_SIZE_POINTS = 180; // 2.5 inches
+  if (targetWidth < MIN_READABLE_SIZE_POINTS && targetHeight < MIN_READABLE_SIZE_POINTS) {
     if (aspectRatio >= 1) {
-      targetWidth = MIN_PREVIEW_SIZE_POINTS;
+      targetWidth = MIN_READABLE_SIZE_POINTS;
       targetHeight = targetWidth / aspectRatio;
     } else {
-      targetHeight = MIN_PREVIEW_SIZE_POINTS;
+      targetHeight = MIN_READABLE_SIZE_POINTS;
       targetWidth = targetHeight * aspectRatio;
     }
   }
 
+  // Ensure we don't exceed the available space
   if (targetWidth > maxUsableWidth) {
     targetWidth = maxUsableWidth;
     targetHeight = targetWidth / aspectRatio;
@@ -152,12 +170,7 @@ const extractSvgDimensions = (svgElement) => {
       if (viewBoxValues.length >= 4) {
         const width = viewBoxValues[2];
         const height = viewBoxValues[3];
-        if (
-          Number.isFinite(width) &&
-          Number.isFinite(height) &&
-          width > 0 &&
-          height > 0
-        ) {
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
           return { width, height };
         }
       }
@@ -169,12 +182,7 @@ const extractSvgDimensions = (svgElement) => {
     if (widthAttr && heightAttr) {
       const width = parseFloat(widthAttr);
       const height = parseFloat(heightAttr);
-      if (
-        Number.isFinite(width) &&
-        Number.isFinite(height) &&
-        width > 0 &&
-        height > 0
-      ) {
+      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
         return { width, height };
       }
     }
@@ -185,12 +193,7 @@ const extractSvgDimensions = (svgElement) => {
       if (childWidthAttr && childHeightAttr) {
         const width = parseFloat(childWidthAttr);
         const height = parseFloat(childHeightAttr);
-        if (
-          Number.isFinite(width) &&
-          Number.isFinite(height) &&
-          width > 0 &&
-          height > 0
-        ) {
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
           return { width, height };
         }
       }
@@ -215,6 +218,8 @@ const useStyles = makeStyles({
     flexDirection: "column",
     gap: "16px",
     padding: "24px 20px 32px",
+    minHeight: "100vh",
+    paddingBottom: "100px", // Extra padding to ensure content doesn't hide behind sticky buttons
   },
   description: {
     color: tokens.colorNeutralForeground2,
@@ -275,8 +280,9 @@ const useStyles = makeStyles({
   },
   previewContentGantt: {
     "& svg": {
-      minWidth: "640px",
+      minWidth: "800px",
       height: "auto",
+      maxWidth: "none",
     },
   },
   previewContentStateDiagram: {
@@ -303,6 +309,18 @@ const useStyles = makeStyles({
     alignItems: "center",
     height: "200px",
     color: tokens.colorNeutralForeground2,
+  },
+  buttonContainer: {
+    position: "sticky",
+    bottom: "0",
+    backgroundColor: tokens.colorNeutralBackground1,
+    padding: "16px 0",
+    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+    zIndex: 10,
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "8px",
+    marginTop: "16px",
   },
 });
 
@@ -335,7 +353,9 @@ const MermaidEditor = () => {
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
   const [diagramType, setDiagramType] = React.useState("");
-  const [pageDimensions, setPageDimensions] = React.useState(() => ({ ...DEFAULT_PAGE_DIMENSIONS }));
+  const [pageDimensions, setPageDimensions] = React.useState(() => ({
+    ...DEFAULT_PAGE_DIMENSIONS,
+  }));
   const previewRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
@@ -369,12 +389,14 @@ const MermaidEditor = () => {
     try {
       pageDimensionsRequestRef.current = true;
       console.log("Fetching page dimensions from Word document...");
-      
+
       const dims = await getDocumentPageDimensions();
-      
+
       if (dims && typeof dims === "object") {
         const ensurePositive = (value, minValue, fallback) =>
-          typeof value === "number" && Number.isFinite(value) && value > minValue ? value : fallback;
+          typeof value === "number" && Number.isFinite(value) && value > minValue
+            ? value
+            : fallback;
 
         const ensureNonNegative = (value, fallback) =>
           typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -390,7 +412,7 @@ const MermaidEditor = () => {
 
         pageDimensionsRef.current = normalizedDims;
         lastPageDimensionsUpdateRef.current = now;
-        
+
         setPageDimensions((prev) => {
           if (
             prev.pageWidth !== normalizedDims.pageWidth ||
@@ -450,7 +472,12 @@ const MermaidEditor = () => {
     svgElement.removeAttribute("height");
 
     const { width: svgWidth, height: svgHeight } = extractSvgDimensions(svgElement);
-    if (!Number.isFinite(svgWidth) || !Number.isFinite(svgHeight) || svgWidth <= 0 || svgHeight <= 0) {
+    if (
+      !Number.isFinite(svgWidth) ||
+      !Number.isFinite(svgHeight) ||
+      svgWidth <= 0 ||
+      svgHeight <= 0
+    ) {
       resetPreviewSizing();
       return;
     }
@@ -464,8 +491,10 @@ const MermaidEditor = () => {
 
     const containerElement = previewContainerRef.current;
     const containerRect = containerElement.getBoundingClientRect();
-    const containerWidth = containerRect.width || containerElement.clientWidth || containerElement.offsetWidth || 0;
-    const containerHeight = containerRect.height || containerElement.clientHeight || containerElement.offsetHeight || 0;
+    const containerWidth =
+      containerRect.width || containerElement.clientWidth || containerElement.offsetWidth || 0;
+    const containerHeight =
+      containerRect.height || containerElement.clientHeight || containerElement.offsetHeight || 0;
 
     let horizontalPadding = 0;
     let verticalPadding = 0;
@@ -520,89 +549,94 @@ const MermaidEditor = () => {
   }, [applyPreviewSizing, clearPreviewAnimationFrame]);
 
   // Initialize Mermaid configuration once
-  const mermaidConfig = React.useMemo(() => ({
-    startOnLoad: false,
-    securityLevel: "strict",
-    suppressErrorRendering: true,
-    theme: theme,
-    fontFamily: "Arial, sans-serif",
-    fontSize: 16,
-    flowchart: {
-      useMaxWidth: true,
-      htmlLabels: true,
-      curve: "basis",
-      padding: 20
-    },
-    sequence: {
-      useMaxWidth: true,
-      wrap: true,
-      boxMargin: 10,
-      boxTextMargin: 5,
-      noteMargin: 10,
-      messageMargin: 35
-    },
-    gantt: {
-      useMaxWidth: false,
-      titleTopMargin: 25,
-      barHeight: 20,
-      fontSize: 12,
-      sectionFontSize: 12,
-      gridLineStartPadding: 35,
-      gridLineEndPadding: 35,
-      barGap: 4,
-      topPadding: 30,
-      leftPadding: 50,
-      rightPadding: 50,
-      bottomPadding: 30
-    },
-    classDiagram: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    state: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    stateDiagram: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    stateDiagramV2: {
-      useMaxWidth: true,
-      padding: 15,
-      maxWidth: 480
-    },
-    pie: {
-      useMaxWidth: true,
-      textPosition: 0.75,
-      pieStrokeWidth: 2,
-      pieOuterStrokeWidth: 2,
-      pieInnerStrokeWidth: 2
-    },
-    journey: {
-      useMaxWidth: true,
-      padding: 20,
-      boxMargin: 10,
-      boxTextMargin: 5,
-      leftMargin: 100,
-      rightMargin: 100
-    },
-    er: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    mindmap: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    timeline: {
-      useMaxWidth: true,
-      padding: 20
-    },
-    gitGraph: {
-      useMaxWidth: true
-    }
-  }), [theme]);
+  const mermaidConfig = React.useMemo(
+    () => ({
+      startOnLoad: false,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+      theme: theme,
+      fontFamily: "Arial, sans-serif",
+      fontSize: 18, // Increased from 16 for better readability
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: "basis",
+        padding: 20,
+      },
+      sequence: {
+        useMaxWidth: true,
+        wrap: true,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 35,
+      },
+      gantt: {
+        useMaxWidth: false,
+        titleTopMargin: 35,
+        barHeight: 25,
+        fontSize: 14,
+        sectionFontSize: 14,
+        gridLineStartPadding: 45,
+        gridLineEndPadding: 45,
+        barGap: 6,
+        topPadding: 40,
+        leftPadding: 75,
+        rightPadding: 75,
+        bottomPadding: 40,
+        displayMode: "compact",
+        axisFormat: "%Y-%m-%d",
+      },
+      classDiagram: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      state: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      stateDiagram: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      stateDiagramV2: {
+        useMaxWidth: true,
+        padding: 15,
+        maxWidth: 480,
+      },
+      pie: {
+        useMaxWidth: true,
+        textPosition: 0.75,
+        pieStrokeWidth: 2,
+        pieOuterStrokeWidth: 2,
+        pieInnerStrokeWidth: 2,
+      },
+      journey: {
+        useMaxWidth: true,
+        padding: 20,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        leftMargin: 100,
+        rightMargin: 100,
+      },
+      er: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      mindmap: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      timeline: {
+        useMaxWidth: true,
+        padding: 20,
+      },
+      gitGraph: {
+        useMaxWidth: true,
+      },
+    }),
+    [theme]
+  );
 
   React.useEffect(() => {
     fetchPageDimensions();
@@ -683,7 +717,7 @@ const MermaidEditor = () => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
-    
+
     debounceTimerRef.current = setTimeout(() => {
       renderDiagram();
     }, 200);
@@ -702,7 +736,7 @@ const MermaidEditor = () => {
       if (resizeTimerRef.current) {
         clearTimeout(resizeTimerRef.current);
       }
-      
+
       resizeTimerRef.current = setTimeout(async () => {
         // Trigger re-render when window size changes
         if (previewRef.current && code) {
@@ -719,7 +753,7 @@ const MermaidEditor = () => {
     };
 
     window.addEventListener("resize", handleResize);
-    
+
     return () => {
       window.removeEventListener("resize", handleResize);
       if (resizeTimerRef.current) {
@@ -728,9 +762,12 @@ const MermaidEditor = () => {
     };
   }, [code, schedulePreviewSizing]);
 
-  React.useEffect(() => () => {
-    clearPreviewAnimationFrame();
-  }, [clearPreviewAnimationFrame]);
+  React.useEffect(
+    () => () => {
+      clearPreviewAnimationFrame();
+    },
+    [clearPreviewAnimationFrame]
+  );
 
   // Check for selected images when component mounts or when selection might change
   React.useEffect(() => {
@@ -835,7 +872,6 @@ const MermaidEditor = () => {
     };
   }, [fetchPageDimensions]);
 
-
   const handleCodeChange = (newCode) => {
     setCode(newCode);
     setDiagramType(detectDiagramType(newCode));
@@ -888,8 +924,17 @@ const MermaidEditor = () => {
     <section className={styles.root} aria-label="Mermaid editor">
       <div className={styles.editorPreview}>
         <Field className={styles.editorField}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <Text size="300" weight="semibold">Mermaid Code</Text>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px",
+            }}
+          >
+            <Text size="300" weight="semibold">
+              Mermaid Code
+            </Text>
           </div>
           <div className={styles.codeMirrorWrapper}>
             <CodeMirror
@@ -916,7 +961,9 @@ const MermaidEditor = () => {
         </Field>
         <div>
           <div className={styles.previewHeader}>
-            <Text size="300" weight="semibold">Preview</Text>
+            <Text size="300" weight="semibold">
+              Preview
+            </Text>
             <Dropdown
               className={styles.themeSelector}
               value={theme}
@@ -934,19 +981,11 @@ const MermaidEditor = () => {
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "8px" }}>
-        <Button 
-          appearance="secondary" 
-          onClick={handleEditDiagram}
-          disabled={!hasSelectedImage}
-        >
+      <div className={styles.buttonContainer}>
+        <Button appearance="secondary" onClick={handleEditDiagram} disabled={!hasSelectedImage}>
           Edit Selected
         </Button>
-        <Button 
-          appearance="primary" 
-          onClick={handleInsertDiagram}
-          disabled={!canInsert}
-        >
+        <Button appearance="primary" onClick={handleInsertDiagram} disabled={!canInsert}>
           Insert to Word
         </Button>
       </div>
