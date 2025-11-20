@@ -771,7 +771,6 @@ const MermaidEditor = () => {
   React.useEffect(() => {
     let isMounted = true;
     let initialTimeoutId = null;
-    let intervalId = null;
     let selectionHandlerRegistered = false;
 
     const checkSelectedImage = async () => {
@@ -807,6 +806,13 @@ const MermaidEditor = () => {
         setSelectedImageCode((prev) => (prev ? "" : prev));
       } finally {
         selectionCheckInProgressRef.current = false;
+        if (isMounted) {
+          Promise.resolve().then(() => {
+            if (isMounted) {
+              checkSelectedImage();
+            }
+          });
+        }
       }
     };
 
@@ -854,17 +860,17 @@ const MermaidEditor = () => {
       registerSelectionChangedHandler();
     }, 100);
 
-    // Regular polling as a fallback in case events are missed
-    intervalId = setInterval(checkSelectedImage, 3000);
+    // Add focus listener to check for selection changes when user returns to the task pane
+    window.addEventListener("focus", checkSelectedImage);
 
     return () => {
       isMounted = false;
       if (initialTimeoutId) {
         clearTimeout(initialTimeoutId);
       }
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      
+      window.removeEventListener("focus", checkSelectedImage);
+      
       removeSelectionChangedHandler();
       selectionCheckInProgressRef.current = false;
     };
@@ -984,7 +990,7 @@ const MermaidEditor = () => {
           Edit Selected
         </Button>
         <Button appearance="primary" onClick={handleInsertDiagram} disabled={!canInsert}>
-          Insert to Word
+          Insert | Replace
         </Button>
       </div>
       {error && (
