@@ -5,8 +5,10 @@
       {
         "targets": {
           "esmodules": false
-        }
+        },
+        "useBuiltIns": "usage",
+        "corejs": 3
       }
-    ],
+    ]
   ]
 }
