@@ -23,6 +23,8 @@ import {
   isClassDiagram,
 } from "../utils/diagramUtils";
 
+import { AddRegular, SubtractRegular, ArrowResetRegular } from "@fluentui/react-icons";
+
 const DEFAULT_DIAGRAM = `flowchart LR
 A[Hard] -->|Text| B(Round)
 B --> C{Decision}
@@ -254,14 +256,40 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
-    padding: "16px",
     minHeight: "240px",
     maxHeight: "400px",
-    overflowX: "auto",
-    overflowY: "auto",
+    overflow: "hidden", // Hide scrollbars to manage pan/zoom manually
     boxSizing: "border-box",
+    display: "flex", // Use flexbox for layout
+    flexDirection: "column", // Stack children vertically
+    userSelect: "none",
+  },
+  zoomControlsWrapper: {
+    display: "flex",
+    justifyContent: "flex-end",
+    padding: "8px 16px 0 16px", // Padding at the top of the container
+    zIndex: 1,
+    backgroundColor: tokens.colorNeutralBackground2, // Ensure background is consistent
+  },
+  previewDiagramWrapper: {
+    flexGrow: 1, // Allow this wrapper to take up remaining space
+    overflow: "hidden", // Keep inner content from scrolling the whole container
+    padding: "0 16px 16px 16px", // Apply padding here for the diagram content
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
+    cursor: "grab",
+  },
+  zoomControls: {
+    display: "flex",
+    gap: "4px", // Reduced gap for smaller buttons
+    alignItems: "center",
+  },
+  zoomButton: {
+    minWidth: "28px", // Smaller button size
+    width: "28px",
+    height: "28px",
+    padding: 0,
     justifyContent: "center",
   },
   previewContent: {
@@ -356,6 +384,13 @@ const MermaidEditor = () => {
   const [pageDimensions, setPageDimensions] = React.useState(() => ({
     ...DEFAULT_PAGE_DIMENSIONS,
   }));
+  const [scale, setScale] = React.useState(1);
+  const [translationX, setTranslationX] = React.useState(0);
+  const [translationY, setTranslationY] = React.useState(0);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [startDragX, setStartDragX] = React.useState(0);
+  const [startDragY, setStartDragY] = React.useState(0);
+  const initialSvgDimsRef = React.useRef({ width: 0, height: 0 }); // Stores original dimensions of the SVG
   const previewRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
@@ -439,8 +474,57 @@ const MermaidEditor = () => {
     return pageDimensionsRef.current;
   }, [setPageDimensions]);
 
+  const handleMouseDown = React.useCallback((e) => {
+    if (e.button === 0) { // Left click
+      setIsDragging(true);
+      setStartDragX(e.clientX - translationX);
+      setStartDragY(e.clientY - translationY);
+      e.preventDefault();
+    }
+  }, [translationX, translationY]);
+
+  const handleMouseMove = React.useCallback((e) => {
+    if (isDragging) {
+      setTranslationX(e.clientX - startDragX);
+      setTranslationY(e.clientY - startDragY);
+    }
+  }, [isDragging, startDragX, startDragY]);
+
+  const handleMouseUp = React.useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = React.useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+
+  const resetView = React.useCallback(() => {
+    setScale(1);
+    setTranslationX(0);
+    setTranslationY(0);
+  }, []);
+
+  const zoomIn = React.useCallback(() => {
+    setScale((prev) => Math.min(prev * 1.2, 10)); // Max 1000%
+  }, []);
+
+  const zoomOut = React.useCallback(() => {
+    setScale((prev) => Math.max(prev / 1.2, 0.1)); // Min 10%
+  }, []);
+
+  const setTransform = React.useCallback(() => {
+    if (previewRef.current) {
+      previewRef.current.style.transform = `scale(${scale}) translate(${translationX}px, ${translationY}px)`;
+      previewRef.current.style.transformOrigin = "0 0";
+    }
+  }, [scale, translationX, translationY]);
+
   const resetPreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
+    setScale(1);
+    setTranslationX(0);
+    setTranslationY(0);
 
     if (previewRef.current) {
       previewRef.current.style.width = "100%";
@@ -449,6 +533,8 @@ const MermaidEditor = () => {
       previewRef.current.style.display = "";
       previewRef.current.style.justifyContent = "";
       previewRef.current.style.alignItems = "";
+      previewRef.current.style.transform = ""; // Clear any existing transform
+      previewRef.current.style.transformOrigin = "";
     }
 
     if (previewContainerRef.current) {
@@ -465,8 +551,17 @@ const MermaidEditor = () => {
     const svgElement = previewRef.current.querySelector("svg");
     if (!svgElement) {
       resetPreviewSizing();
+      initialSvgDimsRef.current = { width: 0, height: 0 };
       return;
     }
+
+    // Store original SVG dimensions before removing attributes
+    const originalSvgWidth = parseFloat(svgElement.getAttribute("width"));
+    const originalSvgHeight = parseFloat(svgElement.getAttribute("height"));
+    initialSvgDimsRef.current = {
+      width: Number.isFinite(originalSvgWidth) && originalSvgWidth > 0 ? originalSvgWidth : 800,
+      height: Number.isFinite(originalSvgHeight) && originalSvgHeight > 0 ? originalSvgHeight : 600,
+    };
 
     svgElement.removeAttribute("width");
     svgElement.removeAttribute("height");
@@ -479,6 +574,7 @@ const MermaidEditor = () => {
       svgHeight <= 0
     ) {
       resetPreviewSizing();
+      initialSvgDimsRef.current = { width: 0, height: 0 };
       return;
     }
 
@@ -512,34 +608,33 @@ const MermaidEditor = () => {
     const availableWidth = Math.max(containerWidth - horizontalPadding, 1);
     const availableHeight = Math.max(containerHeight - verticalPadding, 1);
 
-    let scale = 1;
+    let initialScaleToFit = 1;
 
     if (targetWidthPx > availableWidth && availableWidth > 0) {
-      scale = Math.min(scale, availableWidth / targetWidthPx);
+      initialScaleToFit = Math.min(initialScaleToFit, availableWidth / targetWidthPx);
     }
 
     if (targetHeightPx > availableHeight && availableHeight > 0) {
-      scale = Math.min(scale, availableHeight / targetHeightPx);
+      initialScaleToFit = Math.min(initialScaleToFit, availableHeight / targetHeightPx);
     }
 
-    if (!Number.isFinite(scale) || scale <= 0) {
-      scale = 1;
+    if (!Number.isFinite(initialScaleToFit) || initialScaleToFit <= 0) {
+      initialScaleToFit = 1;
     }
 
-    if (scale < 1) {
-      targetWidthPx = Math.max(1, Math.round(targetWidthPx * scale));
-      targetHeightPx = Math.max(1, Math.round(targetHeightPx * scale));
-    }
-
-    svgElement.style.width = `${targetWidthPx}px`;
-    svgElement.style.height = `${targetHeightPx}px`;
-    svgElement.style.maxWidth = `${targetWidthPx}px`;
-    svgElement.style.maxHeight = `${targetHeightPx}px`;
-
-    previewRef.current.style.width = `${targetWidthPx}px`;
+    // Apply initial scale to the element itself
+    previewRef.current.style.width = `${targetWidthPx * initialScaleToFit}px`;
+    previewRef.current.style.height = `${targetHeightPx * initialScaleToFit}px`;
     previewRef.current.style.maxWidth = "100%";
     previewRef.current.style.minWidth = "auto";
-  }, [resetPreviewSizing]);
+
+    // Ensure the SVG itself fills the parent when not zoomed/panned
+    // The scale/translate will be applied to previewRef.current
+    svgElement.style.width = "100%";
+    svgElement.style.height = "100%";
+
+    setTransform();
+  }, [resetPreviewSizing, setTransform]);
 
   const schedulePreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
@@ -639,6 +734,11 @@ const MermaidEditor = () => {
   React.useEffect(() => {
     fetchPageDimensions();
   }, [fetchPageDimensions]);
+
+  React.useEffect(() => {
+    // This effect ensures the transform is applied whenever scale or translation changes.
+    setTransform();
+  }, [scale, translationX, translationY, setTransform]);
 
   React.useEffect(() => {
     console.log("Initializing Mermaid with theme:", theme);
@@ -981,7 +1081,23 @@ const MermaidEditor = () => {
             </Dropdown>
           </div>
           <div ref={previewContainerRef} className={previewContainerClassName}>
-            <div ref={previewRef} className={previewContentClassName} />
+            <div className={styles.zoomControlsWrapper}>
+              <div className={styles.zoomControls}> {/* Apply zoomControls style here */}
+                <Button size="small" className={styles.zoomButton} onClick={zoomIn} aria-label="Zoom In"><AddRegular /></Button>
+                <Button size="small" className={styles.zoomButton} onClick={zoomOut} aria-label="Zoom Out"><SubtractRegular /></Button>
+                <Button size="small" className={styles.zoomButton} onClick={resetView} aria-label="Reset View"><ArrowResetRegular /></Button>
+              </div>
+            </div>
+            <div
+              className={styles.previewDiagramWrapper}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              style={{ cursor: isDragging ? "grabbing" : "grab" }}
+            >
+              <div ref={previewRef} className={previewContentClassName} />
+            </div>
           </div>
         </div>
       </div>
