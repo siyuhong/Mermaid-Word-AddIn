@@ -1,7 +1,6 @@
 export const DIAGRAM_TYPES = {
   GANTT: "gantt",
-  STATE: "stateDiagram",
-  STATE_V2: "stateDiagram-v2",
+  STATE: "stateDiagram-v2",
   CLASS: "classDiagram",
 };
 
@@ -33,7 +32,7 @@ export function detectDiagramType(code) {
     }
 
     if (lowerLine.startsWith("statediagram-v2")) {
-      return DIAGRAM_TYPES.STATE_V2;
+      return DIAGRAM_TYPES.STATE;
     }
 
     if (lowerLine.startsWith("statediagram")) {
@@ -97,11 +96,7 @@ export function detectDiagramType(code) {
 }
 
 export function isStateDiagram(type) {
-  return type === DIAGRAM_TYPES.STATE || type === DIAGRAM_TYPES.STATE_V2;
-}
-
-export function isStateDiagramV2(type) {
-  return type === DIAGRAM_TYPES.STATE_V2;
+  return type === DIAGRAM_TYPES.STATE;
 }
 
 export function isGanttDiagram(type) {

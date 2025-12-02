@@ -32,19 +32,6 @@ C -->|One| D[Result 1]
 C -->|Two| E[Result 2]
 `;
 
-const MERMAID_THEMES = {
-  default: "default",
-  dark: "dark",
-  forest: "forest",
-  neutral: "neutral",
-};
-
-const CUSTOM_THEME = {
-  primary: "#0078d4",
-  secondary: "#50e6ff",
-  background: "#ffffff",
-  text: "#000000",
-};
 
 const DEFAULT_PAGE_WIDTH_POINTS = 612;
 const DEFAULT_PAGE_HEIGHT_POINTS = 792;
@@ -313,7 +300,7 @@ const useStyles = makeStyles({
       maxWidth: "none",
     },
   },
-  previewContentStateDiagram: {
+  previewContentStateDiagramV2: {
     "& svg": {
       maxWidth: "380px",
       width: "100%",
@@ -690,10 +677,6 @@ const MermaidEditor = () => {
       },
       stateDiagram: {
         useMaxWidth: true,
-        padding: 20,
-      },
-      stateDiagramV2: {
-        useMaxWidth: true,
         padding: 15,
         maxWidth: 480,
       },
@@ -1009,18 +992,12 @@ const MermaidEditor = () => {
     }
   };
 
-  const handleLoadExample = (example) => {
-    setCode(example);
-    setDiagramType(detectDiagramType(example));
-    setError(""); // Clear any previous errors
-  };
-
   const previewContainerClassName = styles.previewContainer;
 
   const previewContentClassName = mergeClasses(
     styles.previewContent,
     isGanttDiagram(diagramType) ? styles.previewContentGantt : undefined,
-    isStateDiagram(diagramType) ? styles.previewContentStateDiagram : undefined,
+    isStateDiagram(diagramType) ? styles.previewContentStateDiagramV2 : undefined,
     isClassDiagram(diagramType) ? styles.previewContentClassDiagram : undefined
   );
 
