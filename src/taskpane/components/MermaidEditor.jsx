@@ -1,4 +1,4 @@
-/* global Office */
+/* global Office, XMLSerializer */
 import * as React from "react";
 import mermaid from "mermaid";
 import {
@@ -976,19 +976,86 @@ const MermaidEditor = () => {
     }
   };
 
+  const serializePreviewSvg = React.useCallback(() => {
+    if (!previewRef.current) {
+      return "";
+    }
+
+    const svgElement = previewRef.current.querySelector("svg");
+    if (!svgElement) {
+      return "";
+    }
+
+    const svgClone = svgElement.cloneNode(true);
+    if (!svgClone || typeof svgClone.setAttribute !== "function") {
+      return "";
+    }
+
+    // Remove preview-only sizing to avoid polluting export dimensions.
+    if (svgClone.style) {
+      svgClone.style.width = "";
+      svgClone.style.height = "";
+      if (!svgClone.getAttribute("style")) {
+        svgClone.removeAttribute("style");
+      }
+    }
+
+    if (!svgClone.getAttribute("xmlns")) {
+      svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+
+    if (svgClone.querySelector("foreignObject") && !svgClone.getAttribute("xmlns:xhtml")) {
+      svgClone.setAttribute("xmlns:xhtml", "http://www.w3.org/1999/xhtml");
+    }
+
+    return new XMLSerializer().serializeToString(svgClone);
+  }, []);
+
+  const renderInsertSafeSvg = React.useCallback(async () => {
+    // Inject an inline init directive to disable htmlLabels without touching the global config.
+    const initDirective = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n';
+    const safeCode = code.trimStart().startsWith("%%{") ? code : initDirective + code;
+    const renderId = `mermaid-insert-safe-${renderIndexRef.current++}`;
+    const { svg } = await mermaid.render(renderId, safeCode);
+    return svg;
+  }, [code]);
+
+  const shouldRetryWithSafeSvg = React.useCallback((err) => {
+    const errorText = `${err?.message || ""} ${err?.stack || ""}`;
+    return /tainted canvases|securityerror|todataurl|failed to load svg image/i.test(errorText);
+  }, []);
+
   const handleInsertDiagram = async () => {
     if (!canInsert || !previewRef.current) {
       return;
     }
 
+    const getErrorMessage = (err) => err?.message || "Failed to insert diagram into Word.";
+
     try {
       setError(""); // Clear any previous errors
-      const svgContent = previewRef.current.innerHTML;
+      const svgContent = serializePreviewSvg();
+      if (!svgContent || !svgContent.includes("<svg")) {
+        throw new Error("Failed to serialize Mermaid SVG from preview.");
+      }
       await insertDiagram(svgContent, code);
     } catch (err) {
+      if (shouldRetryWithSafeSvg(err)) {
+        try {
+          console.warn("Retrying diagram insertion with htmlLabels disabled...");
+          const safeSvg = await renderInsertSafeSvg();
+          await insertDiagram(safeSvg, code);
+          setError("");
+          return;
+        } catch (retryErr) {
+          console.error("Insert diagram retry error:", retryErr);
+          setError(getErrorMessage(retryErr));
+          return;
+        }
+      }
+
       console.error("Insert diagram error:", err);
-      const errorMessage = err?.message || "Failed to insert diagram into Word.";
-      setError(errorMessage);
+      setError(getErrorMessage(err));
     }
   };
 

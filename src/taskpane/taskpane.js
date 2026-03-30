@@ -1,4 +1,4 @@
-/* global Word console, DOMParser, document, Image, btoa */
+/* global Word console, DOMParser, document, Image, btoa, URL, Blob */
 
 import { detectDiagramType } from "./utils/diagramUtils";
 
@@ -361,6 +361,9 @@ async function svgToBase64Png(
   pageDimensions
 ) {
   return new Promise((resolve, reject) => {
+    let objectUrl = null;
+    let hasRetriedWithDataUrl = false;
+
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -375,6 +378,15 @@ async function svgToBase64Png(
 
       img.onload = () => {
         try {
+          if (
+            objectUrl &&
+            typeof URL !== "undefined" &&
+            typeof URL.revokeObjectURL === "function"
+          ) {
+            URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+          }
+
           // Parse SVG viewBox for accurate dimensions
           const viewBoxDimensions = parseSvgViewBox(svgContent);
           let svgWidth, svgHeight;
@@ -438,6 +450,17 @@ async function svgToBase64Png(
       };
 
       img.onerror = () => {
+        if (objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = null;
+        }
+
+        if (!hasRetriedWithDataUrl) {
+          hasRetriedWithDataUrl = true;
+          img.src = svgDataUrl;
+          return;
+        }
+
         reject(new Error("Failed to load SVG image"));
       };
 
@@ -445,6 +468,12 @@ async function svgToBase64Png(
       let fixedSvgContent = svgContent;
       if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
         fixedSvgContent = svgContent.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      if (!fixedSvgContent.includes('xmlns:xlink="http://www.w3.org/1999/xlink"')) {
+        fixedSvgContent = fixedSvgContent.replace(
+          "<svg",
+          '<svg xmlns:xlink="http://www.w3.org/1999/xlink"'
+        );
       }
 
       // Remove any potential external references that could cause CORS issues
@@ -456,8 +485,17 @@ async function svgToBase64Png(
       const svgBase64 = btoa(unescape(encodeURIComponent(fixedSvgContent)));
       const svgDataUrl = `data:image/svg+xml;base64,${svgBase64}`;
 
-      img.src = svgDataUrl;
+      if (typeof Blob !== "undefined" && typeof URL !== "undefined" && URL.createObjectURL) {
+        const svgBlob = new Blob([fixedSvgContent], { type: "image/svg+xml;charset=utf-8" });
+        objectUrl = URL.createObjectURL(svgBlob);
+        img.src = objectUrl;
+      } else {
+        img.src = svgDataUrl;
+      }
     } catch (err) {
+      if (objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(objectUrl);
+      }
       reject(err);
     }
   });
