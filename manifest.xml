@@ -8,17 +8,15 @@
   <Description DefaultValue="Create and insert Mermaid diagrams directly in Word."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-128.png"/>
-  <SupportUrl DefaultValue="https://www.contoso.com/help"/>
+  <SupportUrl DefaultValue="https://github.com/siyuhong/Mermaid-Word-AddIn/issues"/>
   <AppDomains>
-    <AppDomain>https://www.contoso.com</AppDomain>
+    <AppDomain>https://localhost:3000</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
   <DefaultSettings>
     <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
-    <RequestedWidth>600</RequestedWidth>
-    <RequestedHeight>700</RequestedHeight>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
@@ -69,7 +67,7 @@
         <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://go.microsoft.com/fwlink/?LinkId=276812"/>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000/"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
@@ -79,7 +77,7 @@
         <bt:String id="TaskpaneButton.Label" DefaultValue="Mermaid Editor"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Open the Mermaid Editor from the Home tab to design, preview, and insert diagrams into your document."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Open the Mermaid Editor from the Insert tab to design, preview, and insert diagrams into your document."/>
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open the Mermaid diagram editor"/>
       </bt:LongStrings>
     </Resources>

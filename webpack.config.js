@@ -1,20 +1,45 @@
-/* eslint-disable no-undef */
+/* global module, process, require */
 
+const { URL } = require("node:url");
 const devCerts = require("office-addin-dev-certs");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 
 const urlDev = "https://localhost:3000/";
-const urlProd = "https://www.contoso.com/"; // CHANGE THIS TO YOUR PRODUCTION DEPLOYMENT LOCATION
+
+function getProductionUrl() {
+  const value = process.env.ADDIN_BASE_URL;
+  if (!value) {
+    throw new Error("Set ADDIN_BASE_URL to your HTTPS site URL before running npm run build.");
+  }
+
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    ["localhost", "127.0.0.1", "[::1]", "www.contoso.com", "contoso.com"].includes(url.hostname)
+  ) {
+    throw new Error(
+      "ADDIN_BASE_URL must be a deployed HTTPS URL without credentials, query, or hash."
+    );
+  }
+
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
+  return url;
+}
 
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
   return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
 }
 
-module.exports = async (env, options) => {
+module.exports = async (env = {}, options = {}) => {
   const dev = options.mode === "development";
+  const productionUrl = dev ? null : getProductionUrl();
   const config = {
     devtool: dev ? "source-map" : false,
     entry: {
@@ -74,13 +99,24 @@ module.exports = async (env, options) => {
             to: "assets/[name][ext][query]",
           },
           {
+            from: "public",
+            to: ".",
+          },
+          {
             from: "manifest*.xml",
             to: "[name]" + "[ext]",
             transform(content) {
               if (dev) {
                 return content;
               } else {
-                return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
+                return content
+                  .toString()
+                  .split(urlDev)
+                  .join(productionUrl.href.replace(/&/g, "&amp;"))
+                  .replace(
+                    `<AppDomain>${new URL(urlDev).origin}</AppDomain>`,
+                    `<AppDomain>${productionUrl.origin}</AppDomain>`
+                  );
               }
             },
           },
@@ -102,7 +138,7 @@ module.exports = async (env, options) => {
       },
       server: {
         type: "https",
-        options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
+        options: env.WEBPACK_SERVE ? await getHttpsOptions() : undefined,
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
     },

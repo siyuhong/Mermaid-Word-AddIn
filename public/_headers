@@ -1,0 +1,9 @@
+# Word on the web embeds the task pane. Do not add X-Frame-Options or
+# a frame-ancestors policy that prevents Office from embedding this site.
+/*
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+
+/manifest.xml
+  Content-Type: application/xml; charset=utf-8
+  Content-Disposition: attachment; filename="manifest.xml"

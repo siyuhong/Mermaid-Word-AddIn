@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mermaid Diagram Word Add-in · Installation Guide</title>
+    <style>
+      body {
+        max-width: 48rem;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+        font-family: system-ui, sans-serif;
+        font-size: 1rem;
+        line-height: 1.7;
+        color: #242424;
+        background: #fff;
+      }
+      a {
+        color: #005a9e;
+      }
+      a:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 4px;
+      }
+      h1 {
+        font-size: 1.75rem;
+      }
+      h2 {
+        margin-top: 2rem;
+        font-size: 1.25rem;
+      }
+      li {
+        margin-bottom: 0.5rem;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Mermaid Diagram Word Add-in</h1>
+      <p>
+        Write Mermaid code, preview diagrams, and insert them into Word documents. An internet
+        connection is required. You do not need to install Node.js or development certificates.
+      </p>
+      <p>
+        <a href="manifest.xml" download="manifest.xml"
+          >Download the add-in manifest (manifest.xml)</a
+        >
+      </p>
+      <p>
+        This version is installed by sideloading for testing and evaluation. Available installation
+        options depend on your Office version and organization policies.
+      </p>
+
+      <h2>Word on the web</h2>
+      <ol>
+        <li>Download <code>manifest.xml</code> using the link above.</li>
+        <li>Open an editable document in Word on the web.</li>
+        <li>
+          Go to <strong>Home → Add-ins → More Settings → Upload My Add-in</strong> and upload the
+          manifest file. Menu labels may vary by version.
+        </li>
+        <li>Open <strong>Mermaid Editor</strong> from the <strong>Insert</strong> tab.</li>
+      </ol>
+      <p>
+        You may need to upload the manifest again after switching browsers or clearing browser
+        storage. This does not automatically install the add-in in desktop Word.
+      </p>
+
+      <h2>Word on Windows</h2>
+      <ol>
+        <li>
+          Create a folder for the manifest and place the downloaded <code>manifest.xml</code> in it.
+        </li>
+        <li>
+          Share the folder using the <strong>Sharing</strong> tab in its Windows properties. Note
+          the actual UNC path, such as <code>\\YourComputerName\MermaidAddin</code>.
+        </li>
+        <li>
+          In Word, go to
+          <strong
+            >File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs</strong
+          >.
+        </li>
+        <li>
+          Enter the UNC path, select <strong>Add catalog</strong>, and check
+          <strong>Show in Menu</strong>. Close and reopen Word.
+        </li>
+        <li>
+          In the <strong>Add-ins / My Add-ins</strong> dialog, open the
+          <strong>Shared Folder</strong> tab, select <strong>MermaidSupport</strong>, and add it.
+        </li>
+        <li>Open <strong>Mermaid Editor</strong> from the <strong>Insert</strong> tab.</li>
+      </ol>
+      <p>
+        Grant read access only to accounts that need to use the folder. If your organization blocks
+        shared folders or sideloading, contact your administrator.
+      </p>
+
+      <h2>Insert and edit diagrams</h2>
+      <ol>
+        <li>Enter your code or use the default example, then wait for the preview to finish.</li>
+        <li>
+          Place the Word cursor where you want the diagram and click
+          <strong>Insert | Replace</strong>. Any currently selected text or image will be replaced.
+        </li>
+        <li>
+          To edit a diagram, select an image inserted by this add-in and click
+          <strong>Edit Selected</strong>
+          to load its source code.
+        </li>
+        <li>
+          After making changes, keep the original image selected and click
+          <strong>Insert | Replace</strong>
+          to update it.
+        </li>
+      </ol>
+      <p>
+        The Mermaid source is stored in the image's alternative text and saved with the document.
+        Keep this information intact to edit the diagram again.
+      </p>
+
+      <h2>Help</h2>
+      <ul>
+        <li><a href="https://github.com/siyuhong/Mermaid-Word-AddIn/issues">Report an issue</a></li>
+        <li>
+          <a
+            href="https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing"
+            >Microsoft: Sideload add-ins in Office on the web</a
+          >
+        </li>
+        <li>
+          <a
+            href="https://learn.microsoft.com/office/dev/add-ins/testing/create-a-network-shared-folder-catalog-for-task-pane-and-content-add-ins"
+            >Microsoft: Sideload add-ins on Windows from a network share</a
+          >
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

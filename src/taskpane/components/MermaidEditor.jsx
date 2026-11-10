@@ -1,6 +1,5 @@
-/* global Office, XMLSerializer */
+/* global Office */
 import * as React from "react";
-import mermaid from "mermaid";
 import {
   Field,
   Text,
@@ -16,6 +15,7 @@ import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLan
 import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
 import { insertDiagram, getSelectedImageAltText, getDocumentPageDimensions } from "../taskpane";
+import { renderMermaidSvg } from "../utils/mermaidRenderer";
 import {
   detectDiagramType,
   isGanttDiagram,
@@ -31,7 +31,6 @@ B --> C{Decision}
 C -->|One| D[Result 1]
 C -->|Two| E[Result 2]
 `;
-
 
 const DEFAULT_PAGE_WIDTH_POINTS = 612;
 const DEFAULT_PAGE_HEIGHT_POINTS = 792;
@@ -363,7 +362,8 @@ const MermaidEditor = () => {
   const styles = useStyles();
   const [code, setCode] = React.useState(DEFAULT_DIAGRAM);
   const [error, setError] = React.useState("");
-  const [canInsert, setCanInsert] = React.useState(false);
+  const [renderedDiagram, setRenderedDiagram] = React.useState(null);
+  const [isInserting, setIsInserting] = React.useState(false);
   const [theme, setTheme] = React.useState("default");
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
@@ -382,12 +382,20 @@ const MermaidEditor = () => {
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
+  const renderVersionRef = React.useRef(0);
+  const insertionInProgressRef = React.useRef(false);
   const debounceTimerRef = React.useRef(null);
-  const selectionCheckInProgressRef = React.useRef(false);
-  const resizeTimerRef = React.useRef(null);
   const pageDimensionsRef = React.useRef({ ...DEFAULT_PAGE_DIMENSIONS });
   const pageDimensionsRequestRef = React.useRef(false);
   const lastPageDimensionsUpdateRef = React.useRef(0);
+
+  const canInsert =
+    renderedDiagram?.code === code && renderedDiagram?.theme === theme && !isInserting;
+
+  const invalidateRenderedDiagram = React.useCallback(() => {
+    renderVersionRef.current += 1;
+    setRenderedDiagram(null);
+  }, []);
 
   const clearPreviewAnimationFrame = React.useCallback(() => {
     if (previewAnimationFrameRef.current) {
@@ -461,21 +469,28 @@ const MermaidEditor = () => {
     return pageDimensionsRef.current;
   }, [setPageDimensions]);
 
-  const handleMouseDown = React.useCallback((e) => {
-    if (e.button === 0) { // Left click
-      setIsDragging(true);
-      setStartDragX(e.clientX - translationX);
-      setStartDragY(e.clientY - translationY);
-      e.preventDefault();
-    }
-  }, [translationX, translationY]);
+  const handleMouseDown = React.useCallback(
+    (e) => {
+      if (e.button === 0) {
+        // Left click
+        setIsDragging(true);
+        setStartDragX(e.clientX - translationX);
+        setStartDragY(e.clientY - translationY);
+        e.preventDefault();
+      }
+    },
+    [translationX, translationY]
+  );
 
-  const handleMouseMove = React.useCallback((e) => {
-    if (isDragging) {
-      setTranslationX(e.clientX - startDragX);
-      setTranslationY(e.clientY - startDragY);
-    }
-  }, [isDragging, startDragX, startDragY]);
+  const handleMouseMove = React.useCallback(
+    (e) => {
+      if (isDragging) {
+        setTranslationX(e.clientX - startDragX);
+        setTranslationY(e.clientY - startDragY);
+      }
+    },
+    [isDragging, startDragX, startDragY]
+  );
 
   const handleMouseUp = React.useCallback(() => {
     setIsDragging(false);
@@ -484,7 +499,6 @@ const MermaidEditor = () => {
   const handleMouseLeave = React.useCallback(() => {
     setIsDragging(false);
   }, []);
-
 
   const resetView = React.useCallback(() => {
     setScale(1);
@@ -499,13 +513,6 @@ const MermaidEditor = () => {
   const zoomOut = React.useCallback(() => {
     setScale((prev) => Math.max(prev / 1.2, 0.1)); // Min 10%
   }, []);
-
-  const setTransform = React.useCallback(() => {
-    if (previewRef.current) {
-      previewRef.current.style.transform = `scale(${scale}) translate(${translationX}px, ${translationY}px)`;
-      previewRef.current.style.transformOrigin = "0 0";
-    }
-  }, [scale, translationX, translationY]);
 
   const resetPreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
@@ -619,9 +626,7 @@ const MermaidEditor = () => {
     // The scale/translate will be applied to previewRef.current
     svgElement.style.width = "100%";
     svgElement.style.height = "100%";
-
-    setTransform();
-  }, [resetPreviewSizing, setTransform]);
+  }, [resetPreviewSizing]);
 
   const schedulePreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
@@ -654,18 +659,18 @@ const MermaidEditor = () => {
         messageMargin: 35,
       },
       gantt: {
-      useMaxWidth: false,
-      titleTopMargin: 25,
-      barHeight: 20,
-      fontSize: 12,
-      sectionFontSize: 12,
-      gridLineStartPadding: 35,
-      gridLineEndPadding: 35,
-      barGap: 4,
-      topPadding: 30,
-      leftPadding: 50,
-      rightPadding: 50,
-      bottomPadding: 30
+        useMaxWidth: false,
+        titleTopMargin: 25,
+        barHeight: 20,
+        fontSize: 12,
+        sectionFontSize: 12,
+        gridLineStartPadding: 35,
+        gridLineEndPadding: 35,
+        barGap: 4,
+        topPadding: 30,
+        leftPadding: 50,
+        rightPadding: 50,
+        bottomPadding: 30,
       },
       classDiagram: {
         useMaxWidth: true,
@@ -719,22 +724,16 @@ const MermaidEditor = () => {
   }, [fetchPageDimensions]);
 
   React.useEffect(() => {
-    // This effect ensures the transform is applied whenever scale or translation changes.
-    setTransform();
-  }, [scale, translationX, translationY, setTransform]);
-
-  React.useEffect(() => {
-    console.log("Initializing Mermaid with theme:", theme);
-    try {
-      mermaid.initialize(mermaidConfig);
-      console.log("Mermaid initialized successfully");
-    } catch (error) {
-      console.error("Error initializing Mermaid:", error);
+    if (previewRef.current) {
+      previewRef.current.style.transform = `translate(${translationX}px, ${translationY}px) scale(${scale})`;
+      previewRef.current.style.transformOrigin = "0 0";
     }
-  }, [theme, mermaidConfig]);
+  }, [scale, translationX, translationY]);
 
   React.useEffect(() => {
     let isActive = true;
+    const version = renderVersionRef.current;
+    setRenderedDiagram(null);
 
     const renderDiagram = async () => {
       if (!previewRef.current) {
@@ -742,43 +741,28 @@ const MermaidEditor = () => {
       }
 
       await fetchPageDimensions();
-
-      try {
-        // First validate the Mermaid syntax
-        await mermaid.parse(code);
-        console.log("Mermaid code parsed successfully");
-      } catch (err) {
-        if (!isActive) {
-          return;
-        }
-
-        console.error("Mermaid parse error:", err);
-        previewRef.current.innerHTML = "";
-        resetPreviewSizing();
-        setError(getErrorMessage(err, "The provided Mermaid code is invalid."));
-        setCanInsert(false);
-        setDiagramType("");
+      if (!isActive || version !== renderVersionRef.current) {
         return;
       }
 
       try {
         const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
         console.log("Rendering Mermaid diagram with ID:", renderId);
-        const { svg } = await mermaid.render(renderId, code);
+        const { svg } = await renderMermaidSvg(renderId, code, mermaidConfig);
         console.log("Mermaid diagram rendered successfully, SVG length:", svg.length);
 
-        if (!isActive || !previewRef.current) {
+        if (!isActive || version !== renderVersionRef.current || !previewRef.current) {
           return;
         }
 
         previewRef.current.innerHTML = svg;
         setError("");
-        setCanInsert(true);
+        setRenderedDiagram({ svg, code, theme, config: mermaidConfig, version });
         setDiagramType(detectDiagramType(code));
 
         schedulePreviewSizing();
       } catch (err) {
-        if (!isActive) {
+        if (!isActive || version !== renderVersionRef.current) {
           return;
         }
 
@@ -789,7 +773,7 @@ const MermaidEditor = () => {
         resetPreviewSizing();
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
-        setCanInsert(false);
+        setRenderedDiagram(null);
         setDiagramType("");
       }
     };
@@ -809,39 +793,19 @@ const MermaidEditor = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [code, theme, schedulePreviewSizing, resetPreviewSizing, fetchPageDimensions]);
+  }, [code, theme, mermaidConfig, schedulePreviewSizing, resetPreviewSizing, fetchPageDimensions]);
 
-  // Handle window resize to re-render diagram with new dimensions
+  // Resize the existing SVG without re-parsing or replacing the diagram.
   React.useEffect(() => {
-    const handleResize = async () => {
-      if (resizeTimerRef.current) {
-        clearTimeout(resizeTimerRef.current);
-      }
-
-      resizeTimerRef.current = setTimeout(async () => {
-        // Trigger re-render when window size changes
-        if (previewRef.current && code) {
-          try {
-            const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
-            const { svg } = await mermaid.render(renderId, code);
-            previewRef.current.innerHTML = svg;
-            schedulePreviewSizing();
-          } catch (err) {
-            console.log("Error re-rendering on resize:", err);
-          }
-        }
-      }, 300);
-    };
-
-    window.addEventListener("resize", handleResize);
-
+    window.addEventListener("resize", schedulePreviewSizing);
     return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeTimerRef.current) {
-        clearTimeout(resizeTimerRef.current);
-      }
+      window.removeEventListener("resize", schedulePreviewSizing);
     };
-  }, [code, schedulePreviewSizing]);
+  }, [schedulePreviewSizing]);
+
+  React.useEffect(() => {
+    schedulePreviewSizing();
+  }, [pageDimensions, schedulePreviewSizing]);
 
   React.useEffect(
     () => () => {
@@ -855,19 +819,26 @@ const MermaidEditor = () => {
     let isMounted = true;
     let initialTimeoutId = null;
     let selectionHandlerRegistered = false;
+    let selectionCheckInProgress = false;
+    let selectionCheckPending = false;
 
     const checkSelectedImage = async () => {
-      if (selectionCheckInProgressRef.current) {
+      if (!isMounted) {
+        return;
+      }
+      if (selectionCheckInProgress) {
+        selectionCheckPending = true;
         return;
       }
 
-      selectionCheckInProgressRef.current = true;
+      selectionCheckInProgress = true;
+      selectionCheckPending = false;
 
       try {
         fetchPageDimensions().catch(() => {});
 
         const mermaidCode = await getSelectedImageAltText();
-        if (!isMounted) {
+        if (!isMounted || selectionCheckPending) {
           return;
         }
 
@@ -880,7 +851,7 @@ const MermaidEditor = () => {
           setSelectedImageCode((prev) => (prev ? "" : prev));
         }
       } catch (error) {
-        if (!isMounted) {
+        if (!isMounted || selectionCheckPending) {
           return;
         }
 
@@ -888,13 +859,9 @@ const MermaidEditor = () => {
         setHasSelectedImage(false);
         setSelectedImageCode((prev) => (prev ? "" : prev));
       } finally {
-        selectionCheckInProgressRef.current = false;
-        if (isMounted) {
-          Promise.resolve().then(() => {
-            if (isMounted) {
-              checkSelectedImage();
-            }
-          });
+        selectionCheckInProgress = false;
+        if (isMounted && selectionCheckPending) {
+          checkSelectedImage();
         }
       }
     };
@@ -914,6 +881,9 @@ const MermaidEditor = () => {
         (asyncResult) => {
           if (asyncResult?.status === Office.AsyncResultStatus.Succeeded) {
             selectionHandlerRegistered = true;
+            if (!isMounted) {
+              removeSelectionChangedHandler();
+            }
           } else if (asyncResult?.error) {
             console.log("Failed to register selection changed handler:", asyncResult.error);
           }
@@ -931,10 +901,9 @@ const MermaidEditor = () => {
         return;
       }
 
-      Office.context.document.removeHandlerAsync(
-        Office.EventType.DocumentSelectionChanged,
-        checkSelectedImage
-      );
+      Office.context.document.removeHandlerAsync(Office.EventType.DocumentSelectionChanged, {
+        handler: checkSelectedImage,
+      });
     };
 
     // Check immediately on mount and register event handler once Office is ready
@@ -951,74 +920,43 @@ const MermaidEditor = () => {
       if (initialTimeoutId) {
         clearTimeout(initialTimeoutId);
       }
-      
+
       window.removeEventListener("focus", checkSelectedImage);
-      
+
       removeSelectionChangedHandler();
-      selectionCheckInProgressRef.current = false;
+      selectionCheckPending = false;
     };
   }, [fetchPageDimensions]);
 
   const handleCodeChange = (newCode) => {
+    if (newCode === code) {
+      return;
+    }
+    invalidateRenderedDiagram();
     setCode(newCode);
     setDiagramType(detectDiagramType(newCode));
   };
 
   const handleThemeChange = (event, data) => {
-    setTheme(data.optionValue || "default");
+    const newTheme = data.optionValue || "default";
+    if (newTheme !== theme) {
+      invalidateRenderedDiagram();
+      setTheme(newTheme);
+    }
   };
 
   const handleEditDiagram = () => {
     if (selectedImageCode) {
-      setCode(selectedImageCode);
-      setDiagramType(detectDiagramType(selectedImageCode));
+      handleCodeChange(selectedImageCode);
       setError(""); // Clear any previous errors
     }
   };
 
-  const serializePreviewSvg = React.useCallback(() => {
-    if (!previewRef.current) {
-      return "";
-    }
-
-    const svgElement = previewRef.current.querySelector("svg");
-    if (!svgElement) {
-      return "";
-    }
-
-    const svgClone = svgElement.cloneNode(true);
-    if (!svgClone || typeof svgClone.setAttribute !== "function") {
-      return "";
-    }
-
-    // Remove preview-only sizing to avoid polluting export dimensions.
-    if (svgClone.style) {
-      svgClone.style.width = "";
-      svgClone.style.height = "";
-      if (!svgClone.getAttribute("style")) {
-        svgClone.removeAttribute("style");
-      }
-    }
-
-    if (!svgClone.getAttribute("xmlns")) {
-      svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    }
-
-    if (svgClone.querySelector("foreignObject") && !svgClone.getAttribute("xmlns:xhtml")) {
-      svgClone.setAttribute("xmlns:xhtml", "http://www.w3.org/1999/xhtml");
-    }
-
-    return new XMLSerializer().serializeToString(svgClone);
-  }, []);
-
-  const renderInsertSafeSvg = React.useCallback(async () => {
-    // Inject an inline init directive to disable htmlLabels without touching the global config.
-    const initDirective = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n';
-    const safeCode = code.trimStart().startsWith("%%{") ? code : initDirective + code;
+  const renderInsertSafeSvg = React.useCallback(async (diagram) => {
     const renderId = `mermaid-insert-safe-${renderIndexRef.current++}`;
-    const { svg } = await mermaid.render(renderId, safeCode);
+    const { svg } = await renderMermaidSvg(renderId, diagram.code, diagram.config, true);
     return svg;
-  }, [code]);
+  }, []);
 
   const shouldRetryWithSafeSvg = React.useCallback((err) => {
     const errorText = `${err?.message || ""} ${err?.stack || ""}`;
@@ -1026,25 +964,28 @@ const MermaidEditor = () => {
   }, []);
 
   const handleInsertDiagram = async () => {
-    if (!canInsert || !previewRef.current) {
+    if (
+      !canInsert ||
+      renderedDiagram.version !== renderVersionRef.current ||
+      insertionInProgressRef.current
+    ) {
       return;
     }
 
+    const diagram = renderedDiagram;
+    insertionInProgressRef.current = true;
+    setIsInserting(true);
     const getErrorMessage = (err) => err?.message || "Failed to insert diagram into Word.";
 
     try {
       setError(""); // Clear any previous errors
-      const svgContent = serializePreviewSvg();
-      if (!svgContent || !svgContent.includes("<svg")) {
-        throw new Error("Failed to serialize Mermaid SVG from preview.");
-      }
-      await insertDiagram(svgContent, code);
+      await insertDiagram(diagram.svg, diagram.code);
     } catch (err) {
       if (shouldRetryWithSafeSvg(err)) {
         try {
           console.warn("Retrying diagram insertion with htmlLabels disabled...");
-          const safeSvg = await renderInsertSafeSvg();
-          await insertDiagram(safeSvg, code);
+          const safeSvg = await renderInsertSafeSvg(diagram);
+          await insertDiagram(safeSvg, diagram.code);
           setError("");
           return;
         } catch (retryErr) {
@@ -1056,6 +997,9 @@ const MermaidEditor = () => {
 
       console.error("Insert diagram error:", err);
       setError(getErrorMessage(err));
+    } finally {
+      insertionInProgressRef.current = false;
+      setIsInserting(false);
     }
   };
 
@@ -1126,10 +1070,33 @@ const MermaidEditor = () => {
           </div>
           <div ref={previewContainerRef} className={previewContainerClassName}>
             <div className={styles.zoomControlsWrapper}>
-              <div className={styles.zoomControls}> {/* Apply zoomControls style here */}
-                <Button size="small" className={styles.zoomButton} onClick={zoomIn} aria-label="Zoom In"><AddRegular /></Button>
-                <Button size="small" className={styles.zoomButton} onClick={zoomOut} aria-label="Zoom Out"><SubtractRegular /></Button>
-                <Button size="small" className={styles.zoomButton} onClick={resetView} aria-label="Reset View"><ArrowResetRegular /></Button>
+              <div className={styles.zoomControls}>
+                {" "}
+                {/* Apply zoomControls style here */}
+                <Button
+                  size="small"
+                  className={styles.zoomButton}
+                  onClick={zoomIn}
+                  aria-label="Zoom In"
+                >
+                  <AddRegular />
+                </Button>
+                <Button
+                  size="small"
+                  className={styles.zoomButton}
+                  onClick={zoomOut}
+                  aria-label="Zoom Out"
+                >
+                  <SubtractRegular />
+                </Button>
+                <Button
+                  size="small"
+                  className={styles.zoomButton}
+                  onClick={resetView}
+                  aria-label="Reset View"
+                >
+                  <ArrowResetRegular />
+                </Button>
               </div>
             </div>
             <div

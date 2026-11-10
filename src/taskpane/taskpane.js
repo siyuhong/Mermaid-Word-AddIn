@@ -18,18 +18,13 @@ export async function getDocumentPageDimensions() {
   try {
     return await Word.run(async (context) => {
       // Get the current selection to determine which section we're in
-      const selection = context.document.getSelection();
-      selection.load("parentSectionOrNullObject");
+      const parentSection = context.document.getSelection().parentSectionOrNullObject;
+      parentSection.load("$none");
       await context.sync();
 
-      const parentSection = selection.parentSectionOrNullObject;
       if (!parentSection || parentSection.isNullObject) {
         throw new Error("Selection is not associated with a section");
       }
-
-      // Load the pageSetup properties
-      parentSection.load("pageSetup");
-      await context.sync();
 
       const pageSetup = parentSection.pageSetup;
       pageSetup.load([
@@ -504,21 +499,16 @@ async function svgToBase64Png(
 export async function getSelectedImageAltText() {
   try {
     return await Word.run(async (context) => {
-      const selection = context.document.getSelection();
-      selection.load("inlinePictures");
+      const inlinePictures = context.document.getSelection().inlinePictures;
+      inlinePictures.load("items/altTextTitle,items/altTextDescription");
 
       await context.sync();
 
-      const inlinePictures = selection.inlinePictures;
       if (!inlinePictures || inlinePictures.items.length === 0) {
         return null;
       }
 
       const selectedPicture = inlinePictures.items[0];
-      selectedPicture.load("altTextTitle, altTextDescription");
-
-      await context.sync();
-
       if (
         selectedPicture.altTextTitle === "Mermaid Diagram" &&
         selectedPicture.altTextDescription

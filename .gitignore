@@ -6,3 +6,7 @@ test/testBuild
 node_modules/
 AGENTS.md
 GEMINI.md
+
+# Other
+docs/**
+
