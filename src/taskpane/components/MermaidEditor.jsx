@@ -31,6 +31,19 @@ C -->|Two| E[Result 2]
 // lines (about 210px at 14px) fit inside the box.
 const REQUIREMENT_MIN_RECT_WIDTH = 300;
 
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 10;
+const ZOOM_STEP = 1.2;
+const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
+const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM);
+
+const getWheelDelta = (event, stage) => {
+  const modeMultiplier =
+    event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stage.clientHeight : 1;
+  return event.deltaY * modeMultiplier;
+};
+
 const useStyles = makeStyles({
   root: {
     display: "flex",
@@ -146,6 +159,11 @@ const useStyles = makeStyles({
     gap: "8px",
     marginTop: "16px",
   },
+  zoomValue: {
+    minWidth: "44px",
+    textAlign: "center",
+    color: tokens.colorNeutralForeground2,
+  },
 });
 
 const getErrorMessage = (error, fallback) => {
@@ -177,9 +195,6 @@ const MermaidEditor = () => {
   const [theme, setTheme] = React.useState("default");
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
-  const [scale, setScale] = React.useState(1);
-  const [translationX, setTranslationX] = React.useState(0);
-  const [translationY, setTranslationY] = React.useState(0);
   const [isDragging, setIsDragging] = React.useState(false);
   const [startDragX, setStartDragX] = React.useState(0);
   const [startDragY, setStartDragY] = React.useState(0);
@@ -187,6 +202,8 @@ const MermaidEditor = () => {
   const previewStageRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
+  const zoomLabelRef = React.useRef(null);
+  const viewRef = React.useRef({ scale: 1, translationX: 0, translationY: 0 });
   const renderIndexRef = React.useRef(0);
   const renderVersionRef = React.useRef(0);
   const insertionInProgressRef = React.useRef(false);
@@ -207,27 +224,41 @@ const MermaidEditor = () => {
     }
   }, []);
 
-  const handleMouseDown = React.useCallback(
-    (e) => {
-      if (e.button === 0) {
-        // Left click
-        setIsDragging(true);
-        setStartDragX(e.clientX - translationX);
-        setStartDragY(e.clientY - translationY);
-        e.preventDefault();
-      }
-    },
-    [translationX, translationY]
-  );
+  const applyView = React.useCallback((nextView) => {
+    viewRef.current = nextView;
+    if (zoomLabelRef.current) {
+      // Update the readout imperatively so wheel zooming never re-renders the
+      // editor or CodeMirror.
+      zoomLabelRef.current.textContent = `${Math.round(nextView.scale * 100)}%`;
+    }
+    if (previewRef.current) {
+      previewRef.current.style.transform = `translate(${nextView.translationX}px, ${nextView.translationY}px) scale(${nextView.scale})`;
+      previewRef.current.style.transformOrigin = "0 0";
+    }
+  }, []);
+
+  const handleMouseDown = React.useCallback((e) => {
+    if (e.button === 0) {
+      // Left click
+      setIsDragging(true);
+      setStartDragX(e.clientX - viewRef.current.translationX);
+      setStartDragY(e.clientY - viewRef.current.translationY);
+      e.preventDefault();
+    }
+  }, []);
 
   const handleMouseMove = React.useCallback(
     (e) => {
       if (isDragging) {
-        setTranslationX(e.clientX - startDragX);
-        setTranslationY(e.clientY - startDragY);
+        const { scale: currentScale } = viewRef.current;
+        applyView({
+          scale: currentScale,
+          translationX: e.clientX - startDragX,
+          translationY: e.clientY - startDragY,
+        });
       }
     },
-    [isDragging, startDragX, startDragY]
+    [applyView, isDragging, startDragX, startDragY]
   );
 
   const handleMouseUp = React.useCallback(() => {
@@ -239,24 +270,75 @@ const MermaidEditor = () => {
   }, []);
 
   const resetView = React.useCallback(() => {
-    setScale(1);
-    setTranslationX(0);
-    setTranslationY(0);
-  }, []);
+    applyView({ scale: 1, translationX: 0, translationY: 0 });
+  }, [applyView]);
 
   const zoomIn = React.useCallback(() => {
-    setScale((prev) => Math.min(prev * 1.2, 10)); // Max 1000%
-  }, []);
+    const current = viewRef.current;
+    applyView({ ...current, scale: clampZoom(current.scale * ZOOM_STEP) });
+  }, [applyView]);
 
   const zoomOut = React.useCallback(() => {
-    setScale((prev) => Math.max(prev / 1.2, 0.1)); // Min 10%
-  }, []);
+    const current = viewRef.current;
+    applyView({ ...current, scale: clampZoom(current.scale / ZOOM_STEP) });
+  }, [applyView]);
+
+  // Zoom around the pointer so the diagram stays anchored under the cursor.
+  // A native non-passive listener is required because React's wheel listener
+  // cannot prevent the task pane from scrolling.
+  const handleWheel = React.useCallback(
+    (event) => {
+      const stage = previewStageRef.current;
+      const preview = previewRef.current;
+      if (!stage || !preview || !preview.querySelector("svg")) {
+        return;
+      }
+
+      const delta = getWheelDelta(event, stage);
+      if (!delta) {
+        return;
+      }
+
+      event.preventDefault();
+      setIsDragging(false);
+
+      const current = viewRef.current;
+      const nextScale = clampZoom(current.scale * Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY));
+      if (nextScale === current.scale) {
+        return;
+      }
+
+      // getBoundingClientRect() already includes the current translation and
+      // scale, so this converts the pointer into the preview's untransformed
+      // coordinate space.
+      const rect = preview.getBoundingClientRect();
+      const anchorX = (event.clientX - rect.left) / current.scale;
+      const anchorY = (event.clientY - rect.top) / current.scale;
+
+      applyView({
+        scale: nextScale,
+        translationX: current.translationX - anchorX * (nextScale - current.scale),
+        translationY: current.translationY - anchorY * (nextScale - current.scale),
+      });
+    },
+    [applyView]
+  );
+
+  React.useEffect(() => {
+    const stage = previewStageRef.current;
+    if (!stage) {
+      return undefined;
+    }
+
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      stage.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
 
   const resetPreviewSizing = React.useCallback(() => {
     clearPreviewAnimationFrame();
-    setScale(1);
-    setTranslationX(0);
-    setTranslationY(0);
+    applyView({ scale: 1, translationX: 0, translationY: 0 });
 
     if (previewRef.current) {
       previewRef.current.style.width = "100%";
@@ -273,7 +355,7 @@ const MermaidEditor = () => {
       previewContainerRef.current.scrollTop = 0;
       previewContainerRef.current.scrollLeft = 0;
     }
-  }, [clearPreviewAnimationFrame]);
+  }, [applyView, clearPreviewAnimationFrame]);
 
   const applyPreviewSizing = React.useCallback(() => {
     if (!previewRef.current || !previewStageRef.current) {
@@ -294,14 +376,19 @@ const MermaidEditor = () => {
     const rect = stage.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(stage);
     const horizontalPadding =
-      (parseFloat(computedStyle.paddingLeft) || 0) +
-      (parseFloat(computedStyle.paddingRight) || 0);
+      (parseFloat(computedStyle.paddingLeft) || 0) + (parseFloat(computedStyle.paddingRight) || 0);
     const verticalPadding =
-      (parseFloat(computedStyle.paddingTop) || 0) +
-      (parseFloat(computedStyle.paddingBottom) || 0);
+      (parseFloat(computedStyle.paddingTop) || 0) + (parseFloat(computedStyle.paddingBottom) || 0);
     const availableWidth = Math.max(rect.width - horizontalPadding, 1);
     const availableHeight = Math.max(rect.height - verticalPadding, 1);
-    const fitted = fitIntoBox(geometry, { width: availableWidth, height: availableHeight });
+    // Base scale is the diagram's intrinsic size (1 SVG unit = 1 CSS px), so
+    // the percentage readout means the same thing for preview and insertion.
+    // Only shrink automatically when the intrinsic size does not fit.
+    const fitted = fitIntoBox(
+      geometry,
+      { width: availableWidth, height: availableHeight },
+      { allowUpscale: false }
+    );
 
     previewRef.current.style.width = `${Math.max(1, Math.round(fitted.width))}px`;
     previewRef.current.style.height = `${Math.max(1, Math.round(fitted.height))}px`;
@@ -376,13 +463,6 @@ const MermaidEditor = () => {
     }),
     [theme]
   );
-
-  React.useEffect(() => {
-    if (previewRef.current) {
-      previewRef.current.style.transform = `translate(${translationX}px, ${translationY}px) scale(${scale})`;
-      previewRef.current.style.transformOrigin = "0 0";
-    }
-  }, [scale, translationX, translationY]);
 
   React.useEffect(() => {
     let isActive = true;
@@ -622,12 +702,12 @@ const MermaidEditor = () => {
       // Always rasterise a render made for export: the preview SVG can contain
       // <foreignObject> labels, which taint the canvas and break toDataURL().
       const exportSvg = await renderDiagramForExport(diagram);
-      await insertDiagram(exportSvg, diagram.code);
+      await insertDiagram(exportSvg, diagram.code, { scale: viewRef.current.scale });
     } catch (err) {
       if (shouldRetryWithSafeSvg(err)) {
         try {
           console.warn("Retrying diagram insertion with the preview SVG...");
-          await insertDiagram(diagram.svg, diagram.code);
+          await insertDiagram(diagram.svg, diagram.code, { scale: viewRef.current.scale });
           setError("");
           return;
         } catch (retryErr) {
@@ -732,6 +812,9 @@ const MermaidEditor = () => {
                 >
                   <ArrowResetRegular />
                 </Button>
+                <Text ref={zoomLabelRef} size="200" className={styles.zoomValue}>
+                  100%
+                </Text>
               </div>
             </div>
             <div

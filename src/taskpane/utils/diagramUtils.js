@@ -98,12 +98,21 @@ export function normalizeSvgSize(svgString) {
  * Fit an intrinsic size into a box, preserving the aspect ratio exactly.
  * Preview passes pixels from its real container; Word insertion passes points
  * from the page setup. Neither caller needs to know the diagram type.
+ *
+ * Options:
+ * - scale: multiplier applied after fitting (default 1).
+ * - allowUpscale: when false, the fitted result never exceeds the intrinsic size.
+ * - constrainToBox: when true (default), the scaled result stays inside the box.
  */
-export function fitIntoBox(geometry, maxBox) {
+export function fitIntoBox(geometry, maxBox, options = {}) {
   const intrinsicWidth = toPositive(geometry?.width) || FALLBACK_GEOMETRY.width;
   const intrinsicHeight = toPositive(geometry?.height) || FALLBACK_GEOMETRY.height;
   const maxWidth = toPositive(maxBox?.width) || FALLBACK_GEOMETRY.width;
   const maxHeight = toPositive(maxBox?.height) || FALLBACK_GEOMETRY.height;
-  const scale = Math.min(maxWidth / intrinsicWidth, maxHeight / intrinsicHeight);
+  const boxScale = Math.min(maxWidth / intrinsicWidth, maxHeight / intrinsicHeight);
+  const requestedScale = toPositive(options.scale) || 1;
+  const cappedFitScale = options.allowUpscale === false ? Math.min(boxScale, 1) : boxScale;
+  const scaledFit = cappedFitScale * requestedScale;
+  const scale = options.constrainToBox === false ? scaledFit : Math.min(scaledFit, boxScale);
   return { width: intrinsicWidth * scale, height: intrinsicHeight * scale };
 }

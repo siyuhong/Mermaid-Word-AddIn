@@ -12,6 +12,17 @@ const POINTS_PER_INCH = 72;
 const PNG_DPI = 300; // Use 300 DPI for high-quality PNG export
 const PIXELS_PER_POINT = PNG_DPI / POINTS_PER_INCH; // 4.167 pixels per point at 300 DPI
 const MIN_DIAGRAM_SIZE_POINTS = 144; // 2 inches minimum
+const DEFAULT_INSERT_SCALE = 1;
+const MIN_INSERT_SCALE = 0.1;
+const MAX_INSERT_SCALE = 10;
+
+function normalizeInsertScale(value) {
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_INSERT_SCALE;
+  }
+  return Math.min(Math.max(parsed, MIN_INSERT_SCALE), MAX_INSERT_SCALE);
+}
 
 // Get actual page dimensions and margins from the document
 export async function getDocumentPageDimensions() {
@@ -245,7 +256,7 @@ export async function getSelectedImageAltText() {
   }
 }
 
-export async function insertDiagram(svgContent, mermaidCode) {
+export async function insertDiagram(svgContent, mermaidCode, options = {}) {
   // Insert diagram as PNG with proper scaling for Word document
   try {
     console.log("Starting diagram insertion with optimized sizing...");
@@ -289,7 +300,15 @@ export async function insertDiagram(svgContent, mermaidCode) {
         pageDimensions.pageHeight - pageDimensions.marginTop - pageDimensions.marginBottom,
         MIN_DIAGRAM_SIZE_POINTS
       ) * 0.9;
-    const targetDisplaySize = fitIntoBox(geometry, { width: maxWidth, height: maxHeight });
+    // Fit into the page, but never enlarge a diagram beyond its intrinsic
+    // size. The preview zoom is then applied on top of that size, while the
+    // final image still stays inside the writable page area.
+    const insertScale = normalizeInsertScale(options.scale);
+    const targetDisplaySize = fitIntoBox(
+      geometry,
+      { width: maxWidth, height: maxHeight },
+      { scale: insertScale, allowUpscale: false, constrainToBox: true }
+    );
     console.log("Calculated target display size (points):", targetDisplaySize);
 
     // Convert SVG to PNG with optimal sizing
