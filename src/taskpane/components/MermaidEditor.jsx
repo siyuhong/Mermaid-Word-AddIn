@@ -5,7 +5,6 @@ import {
   Text,
   Button,
   makeStyles,
-  mergeClasses,
   tokens,
   Dropdown,
   Option,
@@ -14,14 +13,9 @@ import CodeMirror from "@uiw/react-codemirror";
 import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
 import { autocompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
-import { insertDiagram, getSelectedImageAltText, getDocumentPageDimensions } from "../taskpane";
+import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 import { renderMermaidSvg } from "../utils/mermaidRenderer";
-import {
-  detectDiagramType,
-  isGanttDiagram,
-  isStateDiagram,
-  isClassDiagram,
-} from "../utils/diagramUtils";
+import { readSvgGeometry, fitIntoBox } from "../utils/diagramUtils";
 
 import { AddRegular, SubtractRegular, ArrowResetRegular } from "@fluentui/react-icons";
 
@@ -32,173 +26,10 @@ C -->|One| D[Result 1]
 C -->|Two| E[Result 2]
 `;
 
-const DEFAULT_PAGE_WIDTH_POINTS = 612;
-const DEFAULT_PAGE_HEIGHT_POINTS = 792;
-const DEFAULT_MARGIN_POINTS = 72;
-const MIN_PREVIEW_SIZE_POINTS = 144;
-const POINTS_PER_INCH = 72;
-const DEFAULT_SCREEN_DPI = 96;
-
-const createDefaultPageDimensions = () => ({
-  pageWidth: DEFAULT_PAGE_WIDTH_POINTS,
-  pageHeight: DEFAULT_PAGE_HEIGHT_POINTS,
-  marginLeft: DEFAULT_MARGIN_POINTS,
-  marginRight: DEFAULT_MARGIN_POINTS,
-  marginTop: DEFAULT_MARGIN_POINTS,
-  marginBottom: DEFAULT_MARGIN_POINTS,
-});
-
-const DEFAULT_PAGE_DIMENSIONS = createDefaultPageDimensions();
-
-const getPixelsPerPoint = () => {
-  if (typeof window !== "undefined") {
-    const devicePixelRatio =
-      typeof window.devicePixelRatio === "number" &&
-      Number.isFinite(window.devicePixelRatio) &&
-      window.devicePixelRatio > 0
-        ? window.devicePixelRatio
-        : 1;
-
-    return (DEFAULT_SCREEN_DPI * devicePixelRatio) / POINTS_PER_INCH;
-  }
-
-  return DEFAULT_SCREEN_DPI / POINTS_PER_INCH;
-};
-
-const DEFAULT_ASPECT_RATIO = 4 / 3;
-
-const calculatePreviewDisplaySize = (
-  originalWidth,
-  originalHeight,
-  pageDimensions = DEFAULT_PAGE_DIMENSIONS
-) => {
-  const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
-  const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
-
-  const aspectRatio =
-    hasValidWidth && hasValidHeight && originalHeight !== 0
-      ? originalWidth / originalHeight
-      : DEFAULT_ASPECT_RATIO;
-
-  const availableWidth = Math.max(
-    pageDimensions.pageWidth - pageDimensions.marginLeft - pageDimensions.marginRight,
-    MIN_PREVIEW_SIZE_POINTS
-  );
-
-  const availableHeight = Math.max(
-    pageDimensions.pageHeight - pageDimensions.marginTop - pageDimensions.marginBottom,
-    MIN_PREVIEW_SIZE_POINTS
-  );
-
-  // Use 90% of available space for better text readability
-  const maxUsableWidth = availableWidth * 0.9;
-  const maxUsableHeight = availableHeight * 0.9;
-
-  const availableAspectRatio = maxUsableWidth / maxUsableHeight;
-
-  let targetWidth;
-  let targetHeight;
-
-  if (aspectRatio > availableAspectRatio) {
-    targetWidth = maxUsableWidth;
-    targetHeight = targetWidth / aspectRatio;
-  } else {
-    targetHeight = maxUsableHeight;
-    targetWidth = targetHeight * aspectRatio;
-  }
-
-  // Ensure minimum size for text readability (2.5 inches instead of 2 inches)
-  const MIN_READABLE_SIZE_POINTS = 180; // 2.5 inches
-  if (targetWidth < MIN_READABLE_SIZE_POINTS && targetHeight < MIN_READABLE_SIZE_POINTS) {
-    if (aspectRatio >= 1) {
-      targetWidth = MIN_READABLE_SIZE_POINTS;
-      targetHeight = targetWidth / aspectRatio;
-    } else {
-      targetHeight = MIN_READABLE_SIZE_POINTS;
-      targetWidth = targetHeight * aspectRatio;
-    }
-  }
-
-  // Ensure we don't exceed the available space
-  if (targetWidth > maxUsableWidth) {
-    targetWidth = maxUsableWidth;
-    targetHeight = targetWidth / aspectRatio;
-  }
-
-  if (targetHeight > maxUsableHeight) {
-    targetHeight = maxUsableHeight;
-    targetWidth = targetHeight * aspectRatio;
-  }
-
-  console.log("Preview calculated with page dimensions:", {
-    pageDimensions,
-    availableWidth,
-    availableHeight,
-    maxUsableWidth,
-    maxUsableHeight,
-    targetWidth: Math.round(targetWidth),
-    targetHeight: Math.round(targetHeight),
-  });
-
-  return {
-    width: Math.round(targetWidth),
-    height: Math.round(targetHeight),
-  };
-};
-
-const extractSvgDimensions = (svgElement) => {
-  if (!svgElement) {
-    return { width: 0, height: 0 };
-  }
-
-  try {
-    const viewBox = svgElement.getAttribute("viewBox");
-    if (viewBox) {
-      const viewBoxValues = viewBox.split(/\s+/).map(parseFloat);
-      if (viewBoxValues.length >= 4) {
-        const width = viewBoxValues[2];
-        const height = viewBoxValues[3];
-        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-          return { width, height };
-        }
-      }
-    }
-
-    const widthAttr = svgElement.getAttribute("width");
-    const heightAttr = svgElement.getAttribute("height");
-
-    if (widthAttr && heightAttr) {
-      const width = parseFloat(widthAttr);
-      const height = parseFloat(heightAttr);
-      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-        return { width, height };
-      }
-    }
-
-    if (svgElement.firstElementChild) {
-      const childWidthAttr = svgElement.firstElementChild.getAttribute("width");
-      const childHeightAttr = svgElement.firstElementChild.getAttribute("height");
-      if (childWidthAttr && childHeightAttr) {
-        const width = parseFloat(childWidthAttr);
-        const height = parseFloat(childHeightAttr);
-        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-          return { width, height };
-        }
-      }
-    }
-
-    if (svgElement.getBBox) {
-      const bbox = svgElement.getBBox();
-      if (bbox && bbox.width && bbox.height) {
-        return { width: bbox.width, height: bbox.height };
-      }
-    }
-  } catch (error) {
-    console.log("Failed to extract SVG dimensions for preview:", error);
-  }
-
-  return { width: 800, height: 600 };
-};
+// Mermaid 10 wraps requirement body text at a fixed 30 characters, but draws
+// it into a rect whose default width is only 200px. Widen the rect so wrapped
+// lines (about 210px at 14px) fit inside the box.
+const REQUIREMENT_MIN_RECT_WIDTH = 300;
 
 const useStyles = makeStyles({
   root: {
@@ -292,27 +123,6 @@ const useStyles = makeStyles({
       height: "auto",
     },
   },
-  previewContentGantt: {
-    "& svg": {
-      minWidth: "800px",
-      height: "auto",
-      maxWidth: "none",
-    },
-  },
-  previewContentStateDiagramV2: {
-    "& svg": {
-      maxWidth: "380px",
-      width: "100%",
-      height: "auto",
-    },
-  },
-  previewContentClassDiagram: {
-    "& svg": {
-      maxWidth: "600px",
-      width: "100%",
-      height: "auto",
-    },
-  },
   error: {
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
@@ -367,27 +177,20 @@ const MermaidEditor = () => {
   const [theme, setTheme] = React.useState("default");
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
-  const [diagramType, setDiagramType] = React.useState("");
-  const [pageDimensions, setPageDimensions] = React.useState(() => ({
-    ...DEFAULT_PAGE_DIMENSIONS,
-  }));
   const [scale, setScale] = React.useState(1);
   const [translationX, setTranslationX] = React.useState(0);
   const [translationY, setTranslationY] = React.useState(0);
   const [isDragging, setIsDragging] = React.useState(false);
   const [startDragX, setStartDragX] = React.useState(0);
   const [startDragY, setStartDragY] = React.useState(0);
-  const initialSvgDimsRef = React.useRef({ width: 0, height: 0 }); // Stores original dimensions of the SVG
   const previewRef = React.useRef(null);
+  const previewStageRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
   const previewAnimationFrameRef = React.useRef(null);
   const renderIndexRef = React.useRef(0);
   const renderVersionRef = React.useRef(0);
   const insertionInProgressRef = React.useRef(false);
   const debounceTimerRef = React.useRef(null);
-  const pageDimensionsRef = React.useRef({ ...DEFAULT_PAGE_DIMENSIONS });
-  const pageDimensionsRequestRef = React.useRef(false);
-  const lastPageDimensionsUpdateRef = React.useRef(0);
 
   const canInsert =
     renderedDiagram?.code === code && renderedDiagram?.theme === theme && !isInserting;
@@ -403,71 +206,6 @@ const MermaidEditor = () => {
       previewAnimationFrameRef.current = null;
     }
   }, []);
-
-  const fetchPageDimensions = React.useCallback(async () => {
-    const now = Date.now();
-    const timeSinceLastUpdate = now - lastPageDimensionsUpdateRef.current;
-
-    if (pageDimensionsRequestRef.current) {
-      return pageDimensionsRef.current;
-    }
-
-    if (timeSinceLastUpdate < 2000) {
-      return pageDimensionsRef.current;
-    }
-
-    try {
-      pageDimensionsRequestRef.current = true;
-      console.log("Fetching page dimensions from Word document...");
-
-      const dims = await getDocumentPageDimensions();
-
-      if (dims && typeof dims === "object") {
-        const ensurePositive = (value, minValue, fallback) =>
-          typeof value === "number" && Number.isFinite(value) && value > minValue
-            ? value
-            : fallback;
-
-        const ensureNonNegative = (value, fallback) =>
-          typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
-
-        const normalizedDims = {
-          pageWidth: ensurePositive(dims.pageWidth, 0, DEFAULT_PAGE_WIDTH_POINTS),
-          pageHeight: ensurePositive(dims.pageHeight, 0, DEFAULT_PAGE_HEIGHT_POINTS),
-          marginLeft: ensureNonNegative(dims.marginLeft, DEFAULT_MARGIN_POINTS),
-          marginRight: ensureNonNegative(dims.marginRight, DEFAULT_MARGIN_POINTS),
-          marginTop: ensureNonNegative(dims.marginTop, DEFAULT_MARGIN_POINTS),
-          marginBottom: ensureNonNegative(dims.marginBottom, DEFAULT_MARGIN_POINTS),
-        };
-
-        pageDimensionsRef.current = normalizedDims;
-        lastPageDimensionsUpdateRef.current = now;
-
-        setPageDimensions((prev) => {
-          if (
-            prev.pageWidth !== normalizedDims.pageWidth ||
-            prev.pageHeight !== normalizedDims.pageHeight ||
-            prev.marginLeft !== normalizedDims.marginLeft ||
-            prev.marginRight !== normalizedDims.marginRight ||
-            prev.marginTop !== normalizedDims.marginTop ||
-            prev.marginBottom !== normalizedDims.marginBottom
-          ) {
-            console.log("Page dimensions updated:", normalizedDims);
-            return normalizedDims;
-          }
-          return prev;
-        });
-
-        return normalizedDims;
-      }
-    } catch (error) {
-      console.log("Failed to fetch page dimensions, using cached/default:", error);
-    } finally {
-      pageDimensionsRequestRef.current = false;
-    }
-
-    return pageDimensionsRef.current;
-  }, [setPageDimensions]);
 
   const handleMouseDown = React.useCallback(
     (e) => {
@@ -538,92 +276,39 @@ const MermaidEditor = () => {
   }, [clearPreviewAnimationFrame]);
 
   const applyPreviewSizing = React.useCallback(() => {
-    if (!previewRef.current || !previewContainerRef.current) {
+    if (!previewRef.current || !previewStageRef.current) {
       return;
     }
 
     const svgElement = previewRef.current.querySelector("svg");
     if (!svgElement) {
       resetPreviewSizing();
-      initialSvgDimsRef.current = { width: 0, height: 0 };
       return;
     }
 
-    // Store original SVG dimensions before removing attributes
-    const originalSvgWidth = parseFloat(svgElement.getAttribute("width"));
-    const originalSvgHeight = parseFloat(svgElement.getAttribute("height"));
-    initialSvgDimsRef.current = {
-      width: Number.isFinite(originalSvgWidth) && originalSvgWidth > 0 ? originalSvgWidth : 800,
-      height: Number.isFinite(originalSvgHeight) && originalSvgHeight > 0 ? originalSvgHeight : 600,
-    };
+    // The SVG already carries explicit pixel dimensions from normalizeSvgSize.
+    // Read those once and fit them into the real preview stage. No diagram-type
+    // widths and no Word page dimensions are involved here.
+    const geometry = readSvgGeometry(svgElement);
+    const stage = previewStageRef.current;
+    const rect = stage.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(stage);
+    const horizontalPadding =
+      (parseFloat(computedStyle.paddingLeft) || 0) +
+      (parseFloat(computedStyle.paddingRight) || 0);
+    const verticalPadding =
+      (parseFloat(computedStyle.paddingTop) || 0) +
+      (parseFloat(computedStyle.paddingBottom) || 0);
+    const availableWidth = Math.max(rect.width - horizontalPadding, 1);
+    const availableHeight = Math.max(rect.height - verticalPadding, 1);
+    const fitted = fitIntoBox(geometry, { width: availableWidth, height: availableHeight });
 
-    svgElement.removeAttribute("width");
-    svgElement.removeAttribute("height");
-
-    const { width: svgWidth, height: svgHeight } = extractSvgDimensions(svgElement);
-    if (
-      !Number.isFinite(svgWidth) ||
-      !Number.isFinite(svgHeight) ||
-      svgWidth <= 0 ||
-      svgHeight <= 0
-    ) {
-      resetPreviewSizing();
-      initialSvgDimsRef.current = { width: 0, height: 0 };
-      return;
-    }
-
-    const currentPageDims = pageDimensionsRef.current;
-    const optimalSizePoints = calculatePreviewDisplaySize(svgWidth, svgHeight, currentPageDims);
-
-    const pixelsPerPoint = getPixelsPerPoint();
-    let targetWidthPx = Math.max(1, Math.round(optimalSizePoints.width * pixelsPerPoint));
-    let targetHeightPx = Math.max(1, Math.round(optimalSizePoints.height * pixelsPerPoint));
-
-    const containerElement = previewContainerRef.current;
-    const containerRect = containerElement.getBoundingClientRect();
-    const containerWidth =
-      containerRect.width || containerElement.clientWidth || containerElement.offsetWidth || 0;
-    const containerHeight =
-      containerRect.height || containerElement.clientHeight || containerElement.offsetHeight || 0;
-
-    let horizontalPadding = 0;
-    let verticalPadding = 0;
-
-    if (typeof window !== "undefined" && containerElement) {
-      const computedStyle = window.getComputedStyle(containerElement);
-      horizontalPadding =
-        (parseFloat(computedStyle.paddingLeft) || 0) +
-        (parseFloat(computedStyle.paddingRight) || 0);
-      verticalPadding =
-        (parseFloat(computedStyle.paddingTop) || 0) +
-        (parseFloat(computedStyle.paddingBottom) || 0);
-    }
-
-    const availableWidth = Math.max(containerWidth - horizontalPadding, 1);
-    const availableHeight = Math.max(containerHeight - verticalPadding, 1);
-
-    let initialScaleToFit = 1;
-
-    if (targetWidthPx > availableWidth && availableWidth > 0) {
-      initialScaleToFit = Math.min(initialScaleToFit, availableWidth / targetWidthPx);
-    }
-
-    if (targetHeightPx > availableHeight && availableHeight > 0) {
-      initialScaleToFit = Math.min(initialScaleToFit, availableHeight / targetHeightPx);
-    }
-
-    if (!Number.isFinite(initialScaleToFit) || initialScaleToFit <= 0) {
-      initialScaleToFit = 1;
-    }
-
-    // Apply initial scale to the element itself
-    previewRef.current.style.width = `${targetWidthPx * initialScaleToFit}px`;
-    previewRef.current.style.height = `${targetHeightPx * initialScaleToFit}px`;
+    previewRef.current.style.width = `${Math.max(1, Math.round(fitted.width))}px`;
+    previewRef.current.style.height = `${Math.max(1, Math.round(fitted.height))}px`;
     previewRef.current.style.maxWidth = "100%";
     previewRef.current.style.minWidth = "auto";
 
-    // Ensure the SVG itself fills the parent when not zoomed/panned
-    // The scale/translate will be applied to previewRef.current
+    // Keep the intrinsic viewBox; the SVG simply fills the fitted box.
     svgElement.style.width = "100%";
     svgElement.style.height = "100%";
   }, [resetPreviewSizing]);
@@ -635,7 +320,8 @@ const MermaidEditor = () => {
     });
   }, [applyPreviewSizing, clearPreviewAnimationFrame]);
 
-  // Initialize Mermaid configuration once
+  // Only content/styling options here. Sizing is decided once by the shared
+  // measurement viewport and fitIntoBox, never per diagram type.
   const mermaidConfig = React.useMemo(
     () => ({
       startOnLoad: false,
@@ -643,15 +329,12 @@ const MermaidEditor = () => {
       suppressErrorRendering: true,
       theme: theme,
       fontFamily: "Arial, sans-serif",
-      fontSize: 16, // Increased from 16 for better readability
+      fontSize: 16,
       flowchart: {
-        useMaxWidth: true,
         htmlLabels: true,
         curve: "basis",
-        padding: 20,
       },
       sequence: {
-        useMaxWidth: true,
         wrap: true,
         boxMargin: 10,
         boxTextMargin: 5,
@@ -659,7 +342,6 @@ const MermaidEditor = () => {
         messageMargin: 35,
       },
       gantt: {
-        useMaxWidth: false,
         titleTopMargin: 25,
         barHeight: 20,
         fontSize: 12,
@@ -672,56 +354,28 @@ const MermaidEditor = () => {
         rightPadding: 50,
         bottomPadding: 30,
       },
-      classDiagram: {
-        useMaxWidth: true,
-        padding: 20,
-      },
-      state: {
-        useMaxWidth: true,
-        padding: 20,
-      },
-      stateDiagram: {
-        useMaxWidth: true,
-        padding: 15,
-        maxWidth: 480,
-      },
       pie: {
-        useMaxWidth: true,
         textPosition: 0.75,
         pieStrokeWidth: 2,
         pieOuterStrokeWidth: 2,
         pieInnerStrokeWidth: 2,
       },
       journey: {
-        useMaxWidth: true,
-        padding: 20,
         boxMargin: 10,
         boxTextMargin: 5,
-        leftMargin: 100,
-        rightMargin: 100,
       },
-      er: {
-        useMaxWidth: true,
-        padding: 20,
-      },
-      mindmap: {
-        useMaxWidth: true,
-        padding: 20,
-      },
-      timeline: {
-        useMaxWidth: true,
-        padding: 20,
-      },
-      gitGraph: {
-        useMaxWidth: true,
+      // Mermaid 10 wraps requirement body text at 30 characters into a box
+      // whose default width is 200px. This only fixes content overflow; it is
+      // not part of the preview/insert sizing path.
+      requirement: {
+        rect_min_width: REQUIREMENT_MIN_RECT_WIDTH,
+        rect_min_height: 200,
+        rect_padding: 10,
+        line_height: 20,
       },
     }),
     [theme]
   );
-
-  React.useEffect(() => {
-    fetchPageDimensions();
-  }, [fetchPageDimensions]);
 
   React.useEffect(() => {
     if (previewRef.current) {
@@ -740,11 +394,6 @@ const MermaidEditor = () => {
         return;
       }
 
-      await fetchPageDimensions();
-      if (!isActive || version !== renderVersionRef.current) {
-        return;
-      }
-
       try {
         const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
         console.log("Rendering Mermaid diagram with ID:", renderId);
@@ -758,7 +407,6 @@ const MermaidEditor = () => {
         previewRef.current.innerHTML = svg;
         setError("");
         setRenderedDiagram({ svg, code, theme, config: mermaidConfig, version });
-        setDiagramType(detectDiagramType(code));
 
         schedulePreviewSizing();
       } catch (err) {
@@ -774,7 +422,6 @@ const MermaidEditor = () => {
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setRenderedDiagram(null);
-        setDiagramType("");
       }
     };
 
@@ -793,7 +440,7 @@ const MermaidEditor = () => {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [code, theme, mermaidConfig, schedulePreviewSizing, resetPreviewSizing, fetchPageDimensions]);
+  }, [code, theme, mermaidConfig, schedulePreviewSizing, resetPreviewSizing]);
 
   // Resize the existing SVG without re-parsing or replacing the diagram.
   React.useEffect(() => {
@@ -802,10 +449,6 @@ const MermaidEditor = () => {
       window.removeEventListener("resize", schedulePreviewSizing);
     };
   }, [schedulePreviewSizing]);
-
-  React.useEffect(() => {
-    schedulePreviewSizing();
-  }, [pageDimensions, schedulePreviewSizing]);
 
   React.useEffect(
     () => () => {
@@ -835,8 +478,6 @@ const MermaidEditor = () => {
       selectionCheckPending = false;
 
       try {
-        fetchPageDimensions().catch(() => {});
-
         const mermaidCode = await getSelectedImageAltText();
         if (!isMounted || selectionCheckPending) {
           return;
@@ -926,7 +567,7 @@ const MermaidEditor = () => {
       removeSelectionChangedHandler();
       selectionCheckPending = false;
     };
-  }, [fetchPageDimensions]);
+  }, []);
 
   const handleCodeChange = (newCode) => {
     if (newCode === code) {
@@ -934,7 +575,6 @@ const MermaidEditor = () => {
     }
     invalidateRenderedDiagram();
     setCode(newCode);
-    setDiagramType(detectDiagramType(newCode));
   };
 
   const handleThemeChange = (event, data) => {
@@ -952,7 +592,7 @@ const MermaidEditor = () => {
     }
   };
 
-  const renderInsertSafeSvg = React.useCallback(async (diagram) => {
+  const renderDiagramForExport = React.useCallback(async (diagram) => {
     const renderId = `mermaid-insert-safe-${renderIndexRef.current++}`;
     const { svg } = await renderMermaidSvg(renderId, diagram.code, diagram.config, true);
     return svg;
@@ -979,13 +619,15 @@ const MermaidEditor = () => {
 
     try {
       setError(""); // Clear any previous errors
-      await insertDiagram(diagram.svg, diagram.code);
+      // Always rasterise a render made for export: the preview SVG can contain
+      // <foreignObject> labels, which taint the canvas and break toDataURL().
+      const exportSvg = await renderDiagramForExport(diagram);
+      await insertDiagram(exportSvg, diagram.code);
     } catch (err) {
       if (shouldRetryWithSafeSvg(err)) {
         try {
-          console.warn("Retrying diagram insertion with htmlLabels disabled...");
-          const safeSvg = await renderInsertSafeSvg(diagram);
-          await insertDiagram(safeSvg, diagram.code);
+          console.warn("Retrying diagram insertion with the preview SVG...");
+          await insertDiagram(diagram.svg, diagram.code);
           setError("");
           return;
         } catch (retryErr) {
@@ -1004,13 +646,6 @@ const MermaidEditor = () => {
   };
 
   const previewContainerClassName = styles.previewContainer;
-
-  const previewContentClassName = mergeClasses(
-    styles.previewContent,
-    isGanttDiagram(diagramType) ? styles.previewContentGantt : undefined,
-    isStateDiagram(diagramType) ? styles.previewContentStateDiagramV2 : undefined,
-    isClassDiagram(diagramType) ? styles.previewContentClassDiagram : undefined
-  );
 
   return (
     <section className={styles.root} aria-label="Mermaid editor">
@@ -1100,6 +735,7 @@ const MermaidEditor = () => {
               </div>
             </div>
             <div
+              ref={previewStageRef}
               className={styles.previewDiagramWrapper}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
@@ -1107,7 +743,7 @@ const MermaidEditor = () => {
               onMouseLeave={handleMouseLeave}
               style={{ cursor: isDragging ? "grabbing" : "grab" }}
             >
-              <div ref={previewRef} className={previewContentClassName} />
+              <div ref={previewRef} className={styles.previewContent} />
             </div>
           </div>
         </div>

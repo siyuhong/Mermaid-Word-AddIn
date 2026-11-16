@@ -1,108 +1,109 @@
-export const DIAGRAM_TYPES = {
-  GANTT: "gantt",
-  STATE: "stateDiagram-v2",
-  CLASS: "classDiagram",
-};
+// Every diagram is rendered into one shared off-screen viewport. Mermaid
+// derives the width of some diagrams (Gantt in particular) from the container
+// it renders into, so a single measurement viewport makes the geometry
+// deterministic for all diagram types without per-type width settings.
+export const RENDER_VIEWPORT_WIDTH = 960;
 
-export function detectDiagramType(code) {
-  if (!code || typeof code !== "string") {
-    return "";
+const FALLBACK_GEOMETRY = { width: 800, height: 600 };
+
+function toPositive(value) {
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+/**
+ * Read the intrinsic geometry of an SVG from either a string or a live element.
+ * The viewBox is authoritative because Mermaid writes width="100%" for most
+ * diagrams. Preview and Word insertion must both use this single reader.
+ */
+export function readSvgGeometry(source) {
+  if (!source) {
+    return { ...FALLBACK_GEOMETRY };
   }
 
-  const sanitizedLines = code
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("%%"));
+  let viewBox;
+  let width;
+  let height;
 
-  for (const line of sanitizedLines) {
-    const lowerLine = line.toLowerCase();
-
-    if (lowerLine.startsWith("%%") || lowerLine.startsWith("---")) {
-      continue;
+  if (typeof source === "string") {
+    const rootTag = source.match(/<svg\b[^>]*>/i)?.[0];
+    if (!rootTag) {
+      return { ...FALLBACK_GEOMETRY };
     }
+    viewBox =
+      rootTag.match(/\bviewBox\s*=\s*"([^"]*)"/i)?.[1] ??
+      rootTag.match(/\bviewBox\s*=\s*'([^']*)'/i)?.[1];
+    width =
+      rootTag.match(/\swidth\s*=\s*"([^"]*)"/i)?.[1] ??
+      rootTag.match(/\swidth\s*=\s*'([^']*)'/i)?.[1];
+    height =
+      rootTag.match(/\sheight\s*=\s*"([^"]*)"/i)?.[1] ??
+      rootTag.match(/\sheight\s*=\s*'([^']*)'/i)?.[1];
+  } else if (typeof source.getAttribute === "function") {
+    viewBox = source.getAttribute("viewBox");
+    width = source.getAttribute("width");
+    height = source.getAttribute("height");
+  } else {
+    return { ...FALLBACK_GEOMETRY };
+  }
 
-    if (lowerLine.startsWith("gantt")) {
-      return DIAGRAM_TYPES.GANTT;
-    }
-
-    if (lowerLine.startsWith("state diagram")) {
-      return DIAGRAM_TYPES.STATE;
-    }
-
-    if (lowerLine.startsWith("statediagram-v2")) {
-      return DIAGRAM_TYPES.STATE;
-    }
-
-    if (lowerLine.startsWith("statediagram")) {
-      return DIAGRAM_TYPES.STATE;
-    }
-
-    if (lowerLine.startsWith("state ")) {
-      return DIAGRAM_TYPES.STATE;
-    }
-
-    if (lowerLine.startsWith("flowchart") || lowerLine.startsWith("graph")) {
-      return "flowchart";
-    }
-
-    if (lowerLine.startsWith("sequence")) {
-      return "sequenceDiagram";
-    }
-
-    if (lowerLine.startsWith("classdiagram")) {
-      return "classDiagram";
-    }
-
-    if (lowerLine.startsWith("class ")) {
-      return "classDiagram";
-    }
-
-    if (lowerLine.startsWith("erdiagram")) {
-      return "erDiagram";
-    }
-
-    if (lowerLine.startsWith("mindmap")) {
-      return "mindmap";
-    }
-
-    if (lowerLine.startsWith("timeline")) {
-      return "timeline";
-    }
-
-    if (lowerLine.startsWith("gitgraph")) {
-      return "gitgraph";
-    }
-
-    if (lowerLine.startsWith("journey")) {
-      return "journey";
-    }
-
-    if (lowerLine.startsWith("pie")) {
-      return "pie";
-    }
-
-    if (lowerLine.startsWith("sankey")) {
-      return "sankey";
-    }
-
-    if (lowerLine.startsWith("block")) {
-      return "block";
+  if (viewBox) {
+    const values = String(viewBox)
+      .trim()
+      .split(/[\s,]+/)
+      .map(parseFloat);
+    if (values.length >= 4) {
+      const boxWidth = toPositive(values[2]);
+      const boxHeight = toPositive(values[3]);
+      if (boxWidth && boxHeight) {
+        return { width: boxWidth, height: boxHeight };
+      }
     }
   }
 
-  return "";
+  const attributeWidth = toPositive(width);
+  const attributeHeight = toPositive(height);
+  if (attributeWidth && attributeHeight) {
+    return { width: attributeWidth, height: attributeHeight };
+  }
+
+  return { ...FALLBACK_GEOMETRY };
 }
 
-export function isStateDiagram(type) {
-  return type === DIAGRAM_TYPES.STATE;
+/**
+ * Give every rendered SVG an explicit pixel size. Mermaid emits width="100%"
+ * plus a max-width style for most diagrams, which makes <img> and canvas
+ * sizing ambiguous. The original viewBox (including a non-zero origin) is kept.
+ */
+export function normalizeSvgSize(svgString) {
+  const geometry = readSvgGeometry(svgString);
+  if (typeof svgString !== "string" || !/<svg\b[^>]*>/i.test(svgString)) {
+    return { svg: svgString, geometry };
+  }
+
+  const svg = svgString.replace(/<svg\b([^>]*)>/i, (tag, attributes) => {
+    const cleaned = attributes
+      .replace(/\s(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*')/gi, "")
+      .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (styleMatch, styles) => {
+        const kept = styles.replace(/max-width\s*:\s*[^;]+;?/gi, "").trim();
+        return kept ? ` style="${kept}"` : "";
+      });
+    return `<svg${cleaned} width="${geometry.width}" height="${geometry.height}">`;
+  });
+
+  return { svg, geometry };
 }
 
-export function isGanttDiagram(type) {
-  return type === DIAGRAM_TYPES.GANTT;
-}
-
-export function isClassDiagram(type) {
-  return type === DIAGRAM_TYPES.CLASS;
+/**
+ * Fit an intrinsic size into a box, preserving the aspect ratio exactly.
+ * Preview passes pixels from its real container; Word insertion passes points
+ * from the page setup. Neither caller needs to know the diagram type.
+ */
+export function fitIntoBox(geometry, maxBox) {
+  const intrinsicWidth = toPositive(geometry?.width) || FALLBACK_GEOMETRY.width;
+  const intrinsicHeight = toPositive(geometry?.height) || FALLBACK_GEOMETRY.height;
+  const maxWidth = toPositive(maxBox?.width) || FALLBACK_GEOMETRY.width;
+  const maxHeight = toPositive(maxBox?.height) || FALLBACK_GEOMETRY.height;
+  const scale = Math.min(maxWidth / intrinsicWidth, maxHeight / intrinsicHeight);
+  return { width: intrinsicWidth * scale, height: intrinsicHeight * scale };
 }

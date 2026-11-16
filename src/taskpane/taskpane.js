@@ -1,6 +1,6 @@
-/* global Word console, DOMParser, document, Image, btoa, URL, Blob */
+/* global Word console, document, Image, btoa, URL, Blob */
 
-import { detectDiagramType } from "./utils/diagramUtils";
+import { readSvgGeometry, fitIntoBox } from "./utils/diagramUtils";
 
 // Constants for Word page dimensions
 // Default fallback values: US Letter size (8.5" x 11" = 612 x 792 points) with 1" margins (72 points)
@@ -82,163 +82,6 @@ export async function insertText(text) {
   }
 }
 
-// Parse SVG viewBox to get accurate dimensions
-function parseSvgViewBox(svgString) {
-  try {
-    // Try to extract viewBox from SVG tag (most accurate method)
-    const viewBoxMatch = svgString.match(/viewBox\s*=\s*["']([^"']+)["']/);
-    if (viewBoxMatch) {
-      const viewBoxValues = viewBoxMatch[1].split(/\s+/);
-      if (viewBoxValues.length === 4) {
-        const width = parseFloat(viewBoxValues[2]);
-        const height = parseFloat(viewBoxValues[3]);
-
-        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
-          console.log("Parsed viewBox successfully:", width, "x", height);
-          return { width, height };
-        }
-      }
-    }
-
-    // Fallback: try to extract width/height attributes
-    const widthMatch = svgString.match(/width\s*=\s*["']?([^"'\s>]+)/);
-    const heightMatch = svgString.match(/height\s*=\s*["']?([^"'\s>]+)/);
-
-    if (widthMatch && heightMatch) {
-      const width = parseFloat(widthMatch[1]);
-      const height = parseFloat(heightMatch[1]);
-
-      if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
-        console.log("Parsed width/height attributes:", width, "x", height);
-        return { width, height };
-      }
-    }
-
-    console.log("Could not parse SVG dimensions, using fallback");
-    return { width: 0, height: 0 }; // Signal to use natural dimensions
-  } catch (error) {
-    console.error("Error parsing SVG dimensions:", error);
-    return { width: 0, height: 0 };
-  }
-}
-
-function getSvgDimensions(svgString) {
-  try {
-    // First, try to parse viewBox from SVG string (most reliable)
-    const viewBoxDimensions = parseSvgViewBox(svgString);
-    if (viewBoxDimensions.width > 0 && viewBoxDimensions.height > 0) {
-      return viewBoxDimensions;
-    }
-
-    // Fallback: Use DOM parsing for complex cases
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
-    const svgElement = svgDoc.documentElement;
-
-    // Try to get dimensions from width/height attributes
-    let width = parseFloat(svgElement.getAttribute("width"));
-    let height = parseFloat(svgElement.getAttribute("height"));
-
-    // Try viewBox
-    if (!width || !height) {
-      const viewBox = svgElement.getAttribute("viewBox");
-      if (viewBox) {
-        const viewBoxValues = viewBox.split(" ").map(parseFloat);
-        if (viewBoxValues.length >= 4) {
-          width = width || viewBoxValues[2];
-          height = height || viewBoxValues[3];
-        }
-      }
-    }
-
-    // Try to get from the first child element (common for Mermaid)
-    if (!width || !height) {
-      const firstChild = svgElement.firstElementChild;
-      if (firstChild) {
-        width = width || parseFloat(firstChild.getAttribute("width"));
-        height = height || parseFloat(firstChild.getAttribute("height"));
-
-        // Try viewBox from first child
-        if (!width || !height) {
-          const childViewBox = firstChild.getAttribute("viewBox");
-          if (childViewBox) {
-            const childViewBoxValues = childViewBox.split(" ").map(parseFloat);
-            if (childViewBoxValues.length >= 4) {
-              width = width || childViewBoxValues[2];
-              height = height || childViewBoxValues[3];
-            }
-          }
-        }
-      }
-    }
-
-    // Try DOM measurement as last resort
-    if (typeof document !== "undefined" && document.body && (!width || !height)) {
-      let tempContainer = null;
-      try {
-        tempContainer = document.createElement("div");
-        tempContainer.style.position = "fixed";
-        tempContainer.style.pointerEvents = "none";
-        tempContainer.style.opacity = "0";
-        tempContainer.style.top = "-10000px";
-        tempContainer.style.left = "-10000px";
-        tempContainer.innerHTML = svgString;
-        document.body.appendChild(tempContainer);
-
-        const tempSvg = tempContainer.querySelector("svg");
-        if (tempSvg) {
-          let measuredWidth = null;
-          let measuredHeight = null;
-
-          try {
-            const bbox = tempSvg.getBBox();
-            if (bbox && bbox.width && bbox.height) {
-              measuredWidth = bbox.width;
-              measuredHeight = bbox.height;
-            }
-          } catch {
-            // Ignore measurement errors from getBBox
-          }
-
-          if (!measuredWidth || !measuredHeight) {
-            const rect = tempSvg.getBoundingClientRect();
-            if (rect && rect.width && rect.height) {
-              measuredWidth = measuredWidth || rect.width;
-              measuredHeight = measuredHeight || rect.height;
-            }
-          }
-
-          if (tempSvg.viewBox && tempSvg.viewBox.baseVal) {
-            measuredWidth = measuredWidth || tempSvg.viewBox.baseVal.width;
-            measuredHeight = measuredHeight || tempSvg.viewBox.baseVal.height;
-          }
-
-          if (measuredWidth && measuredWidth > 0) {
-            width = measuredWidth;
-          }
-          if (measuredHeight && measuredHeight > 0) {
-            height = measuredHeight;
-          }
-        }
-      } catch (measurementError) {
-        console.log("Error measuring SVG dimensions via DOM:", measurementError);
-      } finally {
-        if (tempContainer && tempContainer.parentNode) {
-          tempContainer.parentNode.removeChild(tempContainer);
-        }
-      }
-    }
-
-    const fallbackWidth = width && !Number.isNaN(width) ? width : 800;
-    const fallbackHeight = height && !Number.isNaN(height) ? height : 600;
-
-    return { width: fallbackWidth, height: fallbackHeight };
-  } catch (error) {
-    console.log("Error getting SVG dimensions:", error);
-    return { width: 800, height: 600 };
-  }
-}
-
 function normalizePageDimensions(pageDimensions) {
   const layout = pageDimensions || {};
 
@@ -255,106 +98,7 @@ function normalizePageDimensions(pageDimensions) {
   };
 }
 
-function calculateDiagramDisplaySize(
-  originalWidth,
-  originalHeight,
-  diagramType = "",
-  pageDimensions
-) {
-  const hasValidWidth = Number.isFinite(originalWidth) && originalWidth > 0;
-  const hasValidHeight = Number.isFinite(originalHeight) && originalHeight > 0;
-
-  const DEFAULT_ASPECT_RATIO = 4 / 3;
-
-  const svgAspectRatio =
-    hasValidWidth && hasValidHeight && originalHeight !== 0
-      ? originalWidth / originalHeight
-      : DEFAULT_ASPECT_RATIO;
-
-  const normalizedDimensions = normalizePageDimensions(pageDimensions);
-  const availableWidth = Math.max(
-    normalizedDimensions.pageWidth -
-      normalizedDimensions.marginLeft -
-      normalizedDimensions.marginRight,
-    MIN_DIAGRAM_SIZE_POINTS
-  );
-  const availableHeight = Math.max(
-    normalizedDimensions.pageHeight -
-      normalizedDimensions.marginTop -
-      normalizedDimensions.marginBottom,
-    MIN_DIAGRAM_SIZE_POINTS
-  );
-
-  console.log("Available space (points):", availableWidth, "x", availableHeight);
-  console.log("SVG aspect ratio:", svgAspectRatio);
-
-  // Use 90% of available space for better layout and text readability
-  const maxUsableWidth = availableWidth * 0.9;
-  const maxUsableHeight = availableHeight * 0.9;
-
-  const availableAspectRatio = maxUsableWidth / maxUsableHeight;
-
-  let targetWidth, targetHeight;
-
-  if (svgAspectRatio > availableAspectRatio) {
-    // SVG is wider relative to available space - fit to width
-    targetWidth = maxUsableWidth;
-    targetHeight = targetWidth / svgAspectRatio;
-    console.log("Fitting to width (85% of available)");
-  } else {
-    // SVG is taller relative to available space - fit to height
-    targetHeight = maxUsableHeight;
-    targetWidth = targetHeight * svgAspectRatio;
-    console.log("Fitting to height (85% of available)");
-  }
-
-  // Ensure minimum size for better text readability (at least 2.5 inches wide or tall)
-  const MIN_READABLE_SIZE_POINTS = 180; // 2.5 inches
-  if (targetWidth < MIN_READABLE_SIZE_POINTS && targetHeight < MIN_READABLE_SIZE_POINTS) {
-    if (svgAspectRatio >= 1) {
-      targetWidth = MIN_READABLE_SIZE_POINTS;
-      targetHeight = targetWidth / svgAspectRatio;
-    } else {
-      targetHeight = MIN_READABLE_SIZE_POINTS;
-      targetWidth = targetHeight * svgAspectRatio;
-    }
-    console.log("Applied minimum readable size constraint");
-  }
-
-  // Ensure we don't exceed the available space even with minimum size
-  if (targetWidth > maxUsableWidth) {
-    targetWidth = maxUsableWidth;
-    targetHeight = targetWidth / svgAspectRatio;
-    console.log("Capped to maximum width");
-  }
-
-  if (targetHeight > maxUsableHeight) {
-    targetHeight = maxUsableHeight;
-    targetWidth = targetHeight * svgAspectRatio;
-    console.log("Capped to maximum height");
-  }
-
-  console.log("Calculated diagram display size (points):", {
-    diagramType,
-    targetWidth,
-    targetHeight,
-    svgAspectRatio,
-    availableWidth,
-    availableHeight,
-    maxUsableWidth,
-    maxUsableHeight,
-  });
-
-  return { width: Math.round(targetWidth), height: Math.round(targetHeight) };
-}
-
-async function svgToBase64Png(
-  svgContent,
-  diagramType,
-  baseDimensions,
-  targetDisplayDimensions,
-  pageDimensions
-) {
+async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
   return new Promise((resolve, reject) => {
     let objectUrl = null;
     let hasRetriedWithDataUrl = false;
@@ -382,33 +126,10 @@ async function svgToBase64Png(
             objectUrl = null;
           }
 
-          // Parse SVG viewBox for accurate dimensions
-          const viewBoxDimensions = parseSvgViewBox(svgContent);
-          let svgWidth, svgHeight;
-
-          // ALWAYS prefer viewBox dimensions over natural dimensions for accuracy
-          if (viewBoxDimensions.width > 0 && viewBoxDimensions.height > 0) {
-            svgWidth = viewBoxDimensions.width;
-            svgHeight = viewBoxDimensions.height;
-            console.log("Using viewBox dimensions:", svgWidth, "x", svgHeight);
-          } else {
-            // Fallback to natural/provided dimensions
-            svgWidth = baseDimensions?.width || img.naturalWidth || 800;
-            svgHeight = baseDimensions?.height || img.naturalHeight || 600;
-            console.log("Using natural/fallback dimensions:", svgWidth, "x", svgHeight);
-          }
-
-          const hasValidTargetSize =
-            targetDisplayDimensions &&
-            Number.isFinite(targetDisplayDimensions.width) &&
-            Number.isFinite(targetDisplayDimensions.height) &&
-            targetDisplayDimensions.width > 0 &&
-            targetDisplayDimensions.height > 0;
-
-          // Calculate optimal display size in points (Word's unit)
-          const { width: displayWidth, height: displayHeight } = hasValidTargetSize
-            ? targetDisplayDimensions
-            : calculateDiagramDisplaySize(svgWidth, svgHeight, diagramType, pageDimensions);
+          // The SVG was normalised at render time and preview uses the same
+          // geometry, so the canvas keeps exactly the same aspect ratio.
+          console.log("Rasterising SVG geometry:", geometry.width, "x", geometry.height);
+          const { width: displayWidth, height: displayHeight } = targetDisplaySize;
 
           // Calculate 300 DPI pixel dimensions for the target display size
           const canvasWidth = Math.max(Math.round(displayWidth * PIXELS_PER_POINT), 1);
@@ -539,44 +260,40 @@ export async function insertDiagram(svgContent, mermaidCode) {
       throw new Error("SVG content does not contain valid SVG markup");
     }
 
-    const diagramType = detectDiagramType(mermaidCode);
-    if (diagramType) {
-      console.log("Detected Mermaid diagram type:", diagramType);
-    }
-
-    const { width: svgWidth, height: svgHeight } = getSvgDimensions(svgContent);
-    console.log("SVG dimensions:", { svgWidth, svgHeight });
+    // One geometry reader and one aspect-preserving fit, identical to the
+    // task pane preview. No diagram-type specific sizes anywhere.
+    const geometry = readSvgGeometry(svgContent);
+    console.log("SVG intrinsic geometry:", geometry);
 
     // Validate dimensions
     if (
-      !Number.isFinite(svgWidth) ||
-      !Number.isFinite(svgHeight) ||
-      svgWidth <= 0 ||
-      svgHeight <= 0
+      !Number.isFinite(geometry.width) ||
+      !Number.isFinite(geometry.height) ||
+      geometry.width <= 0 ||
+      geometry.height <= 0
     ) {
-      throw new Error(`Invalid SVG dimensions: ${svgWidth}x${svgHeight}`);
+      throw new Error(`Invalid SVG dimensions: ${geometry.width}x${geometry.height}`);
     }
 
     // Get actual page dimensions from the document
-    const pageDimensions = await getDocumentPageDimensions();
+    const pageDimensions = normalizePageDimensions(await getDocumentPageDimensions());
     console.log("Page dimensions:", pageDimensions);
 
-    const targetDisplaySize = calculateDiagramDisplaySize(
-      svgWidth,
-      svgHeight,
-      diagramType,
-      pageDimensions
-    );
+    const maxWidth =
+      Math.max(
+        pageDimensions.pageWidth - pageDimensions.marginLeft - pageDimensions.marginRight,
+        MIN_DIAGRAM_SIZE_POINTS
+      ) * 0.9;
+    const maxHeight =
+      Math.max(
+        pageDimensions.pageHeight - pageDimensions.marginTop - pageDimensions.marginBottom,
+        MIN_DIAGRAM_SIZE_POINTS
+      ) * 0.9;
+    const targetDisplaySize = fitIntoBox(geometry, { width: maxWidth, height: maxHeight });
     console.log("Calculated target display size (points):", targetDisplaySize);
 
     // Convert SVG to PNG with optimal sizing
-    const pngResult = await svgToBase64Png(
-      svgContent,
-      diagramType,
-      { width: svgWidth, height: svgHeight },
-      targetDisplaySize,
-      pageDimensions
-    );
+    const pngResult = await svgToBase64Png(svgContent, geometry, targetDisplaySize);
 
     const pngBase64 = pngResult?.base64;
     const displayWidth = pngResult?.width;
