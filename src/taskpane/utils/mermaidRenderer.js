@@ -95,3 +95,12 @@ export function renderMermaidSvg(id, code, config, forExport = false) {
   renderQueue = request.catch(() => {});
   return request;
 }
+
+export function validateMermaidCode(code) {
+  const request = renderQueue.then(async () => {
+    return mermaid.parse(code);
+  });
+
+  renderQueue = request.catch(() => {});
+  return request;
+}

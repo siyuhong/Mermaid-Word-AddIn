@@ -10,12 +10,22 @@ import {
   Option,
 } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
-import enhancedMermaidLanguage, { mermaidCompletion } from "./enhancedMermaidLanguage";
+import mermaidLanguageExtensions, { mermaidCompletion } from "./mermaidLanguage";
+import {
+  mermaidHighlightStyle,
+  mermaidHighlightStyleDark,
+  mermaidEditorTheme,
+  mermaidEditorThemeDark,
+} from "./mermaidHighlightStyle";
+import { mermaidLinter } from "./mermaidLinter";
 import { autocompletion } from "@codemirror/autocomplete";
+import { syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
+import { foldByIndent } from "codemirror-lang-mermaid";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 import { renderMermaidSvg } from "../utils/mermaidRenderer";
 import { readSvgGeometry, fitIntoBox } from "../utils/diagramUtils";
+import { isOfficeDark, subscribeOfficeThemeChange } from "../utils/officeTheme";
 
 import { AddRegular, SubtractRegular, ArrowResetRegular } from "@fluentui/react-icons";
 
@@ -35,6 +45,28 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
 const ZOOM_STEP = 1.2;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
+const createEditorExtensions = (isDark) => [
+  mermaidLanguageExtensions,
+  autocompletion({
+    override: [mermaidCompletion],
+    activateOnTyping: true,
+    maxRenderedOptions: 10,
+  }),
+  syntaxHighlighting(isDark ? mermaidHighlightStyleDark : mermaidHighlightStyle),
+  isDark ? mermaidEditorThemeDark : mermaidEditorTheme,
+  mermaidLinter,
+  foldByIndent(),
+  EditorView.lineWrapping,
+];
+
+const EDITOR_BASIC_SETUP = {
+  lineNumbers: true,
+  foldGutter: true,
+  highlightActiveLineGutter: true,
+  highlightActiveLine: true,
+  syntaxHighlighting: false,
+};
 
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM);
 
@@ -198,6 +230,7 @@ const MermaidEditor = () => {
   const [isDragging, setIsDragging] = React.useState(false);
   const [startDragX, setStartDragX] = React.useState(0);
   const [startDragY, setStartDragY] = React.useState(0);
+  const [isDarkOfficeTheme, setIsDarkOfficeTheme] = React.useState(isOfficeDark);
   const previewRef = React.useRef(null);
   const previewStageRef = React.useRef(null);
   const previewContainerRef = React.useRef(null);
@@ -211,6 +244,11 @@ const MermaidEditor = () => {
 
   const canInsert =
     renderedDiagram?.code === code && renderedDiagram?.theme === theme && !isInserting;
+
+  const editorExtensions = React.useMemo(
+    () => createEditorExtensions(isDarkOfficeTheme),
+    [isDarkOfficeTheme]
+  );
 
   const invalidateRenderedDiagram = React.useCallback(() => {
     renderVersionRef.current += 1;
@@ -649,6 +687,12 @@ const MermaidEditor = () => {
     };
   }, []);
 
+  // Follow the Word theme using the same detection as the Fluent provider.
+  React.useEffect(() => {
+    setIsDarkOfficeTheme(isOfficeDark());
+    return subscribeOfficeThemeChange(() => setIsDarkOfficeTheme(isOfficeDark()));
+  }, []);
+
   const handleCodeChange = (newCode) => {
     if (newCode === code) {
       return;
@@ -748,21 +792,9 @@ const MermaidEditor = () => {
               value={code}
               onChange={handleCodeChange}
               height="260px"
-              extensions={[
-                enhancedMermaidLanguage,
-                autocompletion({
-                  override: [mermaidCompletion],
-                  activateOnTyping: true,
-                  maxRenderedOptions: 10,
-                }),
-                EditorView.lineWrapping,
-              ]}
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: true,
-                highlightActiveLineGutter: true,
-                highlightActiveLine: true,
-              }}
+              theme="none"
+              extensions={editorExtensions}
+              basicSetup={EDITOR_BASIC_SETUP}
             />
           </div>
         </Field>
