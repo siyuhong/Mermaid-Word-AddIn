@@ -44,10 +44,16 @@ function createExportCode(code) {
     timeline: { ...config.timeline, textPlacement: "old" },
   });
 
+  // Mindmap always renders `::icon(...)` decorations as <foreignObject>, even
+  // though its labels are forced to plain <text>. Drawing that SVG into a
+  // canvas taints it, so the icons must be removed before the export render.
+  // They are not visible in the task pane either unless Font Awesome is loaded.
+  const stripMindmapIcons = (source) => source.replace(/^[ \t]*::icon\([^)\r\n]*\)[ \t]*$/gm, "");
+
   // Match Mermaid's init directive syntax, including its single-quote support.
   // Preserve existing settings while overriding HTML labels and rasterisable
   // text placement in both the modern and legacy `config` shorthand.
-  const exportCode = code.replace(
+  let exportCode = code.replace(
     /%%\{\s*(init|initialize)\s*:\s*([\s\S]*?)\}%%/gi,
     (directive, type, args) => {
       const config = JSON.parse(args.trim().replace(/'/g, '"'));
@@ -61,7 +67,14 @@ function createExportCode(code) {
 
   // Append after the source so YAML frontmatter stays at the beginning and this
   // override takes precedence over frontmatter and any earlier init directives.
-  return `${exportCode}\n%%{init: ${JSON.stringify(exportConfig())}}%%`;
+  exportCode = `${exportCode}\n%%{init: ${JSON.stringify(exportConfig())}}%%`;
+
+  // detectType ignores frontmatter, directives and comments, so it is safe to
+  // run on the transformed source and only affects actual mindmaps.
+  if (mermaid.detectType(exportCode) === "mindmap") {
+    exportCode = stripMindmapIcons(exportCode);
+  }
+  return exportCode;
 }
 
 // Mermaid reuses the box fill classes (`.task-type-N`, `.section-type-N`) for
