@@ -1,184 +1,210 @@
-# Mermaid 图表 Word 加载项
+<p align="center">
+  <img src="assets/logo-filled.png" alt="Mermaid Word Add-in" width="120">
+</p>
+
+<h1 align="center">Mermaid Word AddIn</h1>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://mermaid-word-addin.pages.dev/"><img src="https://img.shields.io/static/v1?label=%E9%83%A8%E7%BD%B2%E7%AB%99%E7%82%B9&message=mermaid--word--addin.pages.dev&color=2b579a" alt="部署站点"></a>
+</p>
 
 [English](README.md) | **简体中文**
 
-一个用于 Microsoft Word 的加载项，支持编写 Mermaid 代码、实时预览图表，并将图表以 PNG 图片插入文档。每张图片的替代文字中会保存对应的 Mermaid 源码，方便选中后再次编辑。
+> 专为 Microsoft Word 打造的 Mermaid 绘图工具：实时预览、一键插入高清图片。
+> 
+> 源码随图保存，选中图片即可再次编辑。
 
-项目基于 React 18、Fluent UI v9 和 CodeMirror 6 构建，提供代码编辑与图表预览体验。
+## 目录
+
+- [目录](#目录)
+- [功能特性](#功能特性)
+- [快速使用](#快速使用)
+  - [Word 网页版](#word-网页版)
+  - [Windows 桌面版 Word](#windows-桌面版-word)
+- [开发指南](#开发指南)
+  - [环境](#环境)
+  - [安装与启动](#安装与启动)
+  - [构建与调试](#构建与调试)
+- [部署指南](#部署指南)
+- [问题反馈](#问题反馈)
+- [参考资料](#参考资料)
+- [许可证](#许可证)
 
 ## 功能特性
 
-- **交互式图表编辑器**：提供支持 Mermaid 语法高亮的代码编辑器
-- **实时预览**：输入代码时自动更新图表预览
-- **多种图表类型**：支持项目所依赖的 Mermaid 10.x 提供的图表语法，包括：
-  - 流程图
-  - 时序图
-  - 类图
-  - 状态图
-  - 实体关系图
-  - 甘特图
-  - 饼图
-  - 更多图表类型
-- **语法高亮**：基于 CodeMirror 6，提供 Mermaid 专用语法高亮
-- **自动补全**：补全 Mermaid 关键字、图表类型和语法
-- **自动换行**：长行自动折行，便于阅读代码
-- **预览导航**：支持放大、缩小、重置视图和拖动平移
-- **主题选择**：支持 default、forest、dark 和 neutral 主题
-- **编辑已有图表**：选中 Word 中已插入的图表，点击 **Edit Selected** 即可重新编辑
-- **高质量输出**：以适合 Word 文档的高质量 PNG 图片插入图表
+- **支持多种图表**：支持流程图、时序图、类图、状态图、实体关系图、甘特图、饼图、思维导图等。
 
-## 环境要求
+  <table>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-flowchart.png"><img src="docs/images/diagram-flowchart.png" alt="流程图：描述判断与处理流程" width="300" height="225"></a>
+        <br>
+        <sub>流程图</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-sequence.png"><img src="docs/images/diagram-sequence.png" alt="时序图：展示参与者之间的交互" width="300" height="225"></a>
+        <br>
+        <sub>时序图</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-class.png"><img src="docs/images/diagram-class.png" alt="类图：组织对象、属性与方法" width="300" height="225"></a>
+        <br>
+        <sub>类图</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-state.png"><img src="docs/images/diagram-state.png" alt="状态图：表达状态变化与生命周期" width="300" height="225"></a>
+        <br>
+        <sub>状态图</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-er.png"><img src="docs/images/diagram-er.png" alt="实体关系图：梳理数据实体与关联" width="300" height="225"></a>
+        <br>
+        <sub>实体关系图</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-gantt.png"><img src="docs/images/diagram-gantt.png" alt="甘特图：安排任务与项目进度" width="300" height="225"></a>
+        <br>
+        <sub>甘特图</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-pie.png"><img src="docs/images/diagram-pie.png" alt="饼图：比较各部分所占比例" width="300" height="225"></a>
+        <br>
+        <sub>饼图</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-mindmap.png"><img src="docs/images/diagram-mindmap.png" alt="思维导图：展开主题与层级结构" width="300" height="225"></a>
+        <br>
+        <sub>思维导图</sub>
+      </td>
+    </tr>
+  </table>
 
-- **Node.js**：使用最新的 LTS 版本。前往 [Node.js 官网](https://nodejs.org/)下载并安装，通过 `node -v` 和 `npm -v` 检查安装结果。
-- **Git**：用于克隆仓库。
-- **Word 桌面版**：以下命令面向桌面版 Word。使用项目自带的 Windows 调试配置时，建议安装较新版本的 Microsoft 365 Word，并使用 Edge Chromium/WebView2。不支持 Internet Explorer（Trident）和旧版 Edge（EdgeHTML）内核。
+  语法以本项目依赖的 Mermaid 10.x 为准，更多示例和版本限制见 [Mermaid 官方文档](https://mermaid.js.org/)。
 
-Mermaid 官网可能包含 10.x 尚不支持的新语法。使用新版文档中的示例时，请先确认项目安装的 Mermaid 版本。
+- **增强编辑体验**：提供 Mermaid 语法高亮、关键词补全、代码折叠、编辑器内语法诊断和自动换行。流程图、时序图、思维导图、饼图、旅程图、需求图和甘特图由上游语法完整着色；类图、状态图、ER 图、Git 图和时间线使用轻量词法高亮。
+- **实时预览**：编辑 Mermaid 代码时同步查看渲染结果。支持鼠标滚轮缩放、按钮缩放、重置视图和拖拽平移。
+- **缩放决定插入大小**：预览的缩放比例同时决定图片插入尺寸。100% 为图表原始尺寸，超出页面可用区域时会自动压缩；缩小预览会缩小插入图片，且不会超出页面可用区域。
+- **主题切换**：支持 default、forest、dark 和 neutral 主题。
+- **重新编辑**：选中由加载项创建的图片，点击 **Edit Selected**，修改 Mermaid 后即可替换原图。
+- **高质量输出**：按可写页面区域自动缩放并插入高分辨率 PNG。
 
-## 安装与启动
+## 快速使用
 
-1. 克隆仓库并进入项目目录：
+### Word 网页版
 
-   ```bash
-   git clone https://github.com/siyuhong/Mermaid-Word-AddIn.git
-   cd Mermaid-Word-AddIn
-   ```
+1. 在 [Word 网页版](https://word.cloud.microsoft) 中打开一份可编辑的文档，进入 **开始 → 加载项 → 更多加载项**。不同版本的入口也可能显示为 **更多设置**。
 
-2. 安装依赖：
+   ![Word 网页版：在开始选项卡中展开加载项，点击更多加载项](docs/images/word-web-01-open-addins.png)
 
-   ```bash
-   npm install
-   ```
+2. 切换到 **我的加载项**，展开 **管理我的加载项**，点击 **上传我的加载项**，选择下载的 `manifest.xml` 并完成上传。
 
-3. 首次配置时，安装本地 HTTPS 开发证书，并在系统提示中信任该证书：
+   ![Office 加载项窗口：在管理我的加载项菜单中选择上传我的加载项](docs/images/word-web-02-upload-manifest.png)
 
-   ```bash
-   npx office-addin-dev-certs install
-   ```
+3. 在 **插入** 选项卡中点击 **Mermaid Editor**，右侧会打开代码编辑和预览窗格。
 
-4. 启动开发服务器，默认地址为 `https://localhost:3000`，并保持此终端运行：
+   ![Word 网页版：从插入选项卡打开 Mermaid Editor，右侧显示编辑器与图表预览](docs/images/word-web-03-open-editor.png)
 
-   ```bash
-   npm run dev-server
-   ```
+### Windows 桌面版 Word
 
-5. 在另一个终端中进入项目目录，将加载项侧载到 Word：
+1. **创建共享文件夹**。新建一个用于存放加载项清单的文件夹，将下载的 `manifest.xml` 放入其中。右键该文件夹，打开 **属性 → 共享→ 共享（S）...**，按向导为需要使用的 Windows 账号设置访问权限并完成共享。完成后复制网络路径。
 
-   ```bash
-   npm start
-   ```
+   ![Windows 文件夹属性：在 Sharing 选项卡中点击 Share 按钮设置共享](docs/images/word-windows-01-share-folder.png)
 
-使用结束后，执行 `npm stop` 移除开发加载项；在手动启动开发服务器的终端中按 `Ctrl+C` 停止服务器。
+2. **添加受信任的加载项目录**。打开 Word，进入 **文件 → 选项 → 信任中心 → 信任中心设置 → 受信任的加载项目录（Trusted Add-in Catalogs）**。将上一步的网络路径粘贴到 **目录 URL（Catalog Url）**，点击 **添加目录（Add catalog）**，勾选新增条目的 **在菜单中显示（Show in Menu）**，然后依次点击 **确定** 关闭设置窗口。
+
+   ![Office 信任中心设置](docs/images/word-windows-02-trusted-setting.png)
+
+   ![Office 信任中心：添加共享文件夹的目录 URL，勾选 Show in Menu，然后点击 OK](docs/images/word-windows-03-trusted-catalog.png)
+
+3. **重启 Word 并安装**。重新打开 Word，进入 **开发工具 → 加载项**，在 Office 加载项窗口中选择 **共享文件夹（Shared Folder）**，选中本加载项并点击 **添加**。
+
+   ![安装](docs/images/word-windows-04-install.png)
+
+   随后在 **插入** 选项卡中打开 **Mermaid Editor**。
+
+   ![使用](docs/images/word-windows-05-used.png)
 
 ## 开发指南
 
-### 使用 Office Add-ins Development Kit 运行加载项
+### 环境
 
-1. **在 Visual Studio Code 中安装 Office Add-ins Development Kit**
+- Node.js & npm
+- Git
+- Word
 
-   在 VS Code 扩展市场中搜索并安装 Office Add-ins Development Kit。
+### 安装与启动
 
-2. **预览加载项（F5）**
+克隆仓库并进入项目目录：
 
-   选择 **Preview Your Office Add-in (F5)**，在快速选择菜单中选择 **Word Desktop (Edge Chromium)**。
-
-   扩展会在调试前检查所需环境。检查完成后，Word 将启动并加载侧载的加载项。
-
-3. **停止预览**
-
-   测试结束后，选择 **Stop Previewing Your Office Add-in**，结束调试并移除侧载的加载项。手动启动的开发服务器需要单独停止。
-
-### 项目命令
-
-- `npm run build`：构建生产版本
-- `npm run build:dev`：构建开发版本
-- `npm run dev-server`：启动支持热更新的开发服务器
-- `npm start`：将加载项侧载到 Word
-- `npm stop`：从 Word 移除加载项
-- `npm run validate`：校验 manifest 文件
-- `npm run validate:production`：按生产要求校验构建后的 `dist/manifest.xml`
-- `npm run lint`：检查代码风格
-- `npm run lint:fix`：自动修复代码风格问题
-- `npm run prettier`：格式化源代码
-- `npm run watch`：监听源文件变化并重新构建
-
-### 生产部署
-
-`npm run build` 将生产构建产物写入 `dist/`，不会自动发布。生产构建要求设置环境变量 `ADDIN_BASE_URL`，不再使用占位地址，也无需把生产域名写进源 manifest。
-
-```powershell
-$env:ADDIN_BASE_URL = "https://你的项目名.pages.dev/"
-npm run build
+```bash
+git clone https://github.com/siyuhong/Mermaid-Word-AddIn.git
+cd Mermaid-Word-AddIn
 ```
 
-构建自动生成线上页面、图标、帮助链接和允许域名对应的 `dist/manifest.xml`；根目录的 `manifest.xml` 仍用于本地开发。将 `dist/` 的内容部署后，运行 `npm run validate:production`，并把站点首页或 `dist/manifest.xml` 交给试用用户。
+安装依赖：
 
-完整步骤见 [Cloudflare Pages 部署与侧载指南](docs/cloudflare-pages.zh-CN.md)，包括 Git 自动部署、手动上传和用户安装说明。侧载属于微软支持的开发测试方式，不是商店发布或企业集中部署的替代渠道。
+```bash
+npm install
+```
 
-## 使用方法
+### 构建与调试
 
-1. 打开 Word，在“插入”选项卡中找到 **Mermaid Editor** 按钮。
-2. 点击按钮打开任务窗格。
-3. 在编辑器中编写 Mermaid 代码，或直接使用默认示例。
-4. 在预览区域查看渲染结果。
-5. 根据需要在下拉框中选择主题。
-6. 等待预览完成，将 Word 光标放在目标位置，点击 **Insert | Replace** 插入图表。如果 Word 当前选中了文字或图片，该选区会被替换。
-7. 如需编辑已有图表：
-   - 在 Word 中选中图表图片。
-   - 点击任务窗格中的 **Edit Selected**。
-   - 图表源码将载入编辑器。
-   - 修改代码，等待预览更新完成。
-   - 保持原图选中，或重新选中原图，再点击 **Insert | Replace** 替换图片。
+构建开发版本：
 
-代码或主题变更尚未完成渲染时，插入按钮会保持禁用。**Edit Selected** 适用于由本加载项插入、且替代文字中仍保留 Mermaid 标题和源码的嵌入型图片；如需再次编辑，请保留这些信息。替换始终作用于 Word 当前选区，不会自动绑定到之前读取源码的图片。
+```bash
+npm run build:dev
+```
 
-如果 Mermaid 初始化指令或 YAML 配置中显式指定了主题，该配置会优先于主题下拉框。
+首次配置时，安装本地 HTTPS 开发证书，并在系统提示中信任该证书：
 
-## 项目结构
+```bash
+npx office-addin-dev-certs install
+```
 
-- `/src/taskpane/`
-  - `index.jsx`：React 入口与 Office.js 初始化
-  - `taskpane.js`：Word JavaScript API 集成
-  - `components/MermaidEditor.jsx`：主编辑器组件
-  - `components/enhancedMermaidLanguage.js`：CodeMirror 的 Mermaid 语言支持增强
-  - `utils/diagramUtils.js`：图表类型检测与工具函数
-  - `utils/mermaidRenderer.js`：Mermaid 渲染队列与导出配置
-- `/assets/`：加载项图标与图片
-- `/src/commands/`：加载项命令回调与宿主页面
-- `/dist/`：构建生成目录，不应手动编辑
-- `manifest.xml`：加载项清单配置
-- `webpack.config.js`：Webpack 打包配置
+启动开发服务器：
 
-## 主要技术
+```bash
+npm run dev-server
+```
 
-- **React 18**：用户界面框架
-- **Fluent UI v9**：微软设计系统
-- **CodeMirror 6**：支持语法高亮的代码编辑器
-- **Mermaid.js**：图表渲染引擎
-- **Office.js**：Word JavaScript API
-- **Webpack**：模块打包工具
+在另一个终端中将加载项侧载到 Word：
 
-## 常见问题排查
+```bash
+npm start
+```
 
-如果加载项无法正常运行，可以尝试：
+调试结束后移除开发加载项：
 
-- 关闭所有已打开的 Word 窗口。
-- 通过 **Stop Previewing Your Office Add-in** 或 `npm stop` 停止调试；手动启动的开发服务器请在对应终端中按 `Ctrl+C` 停止。
-- 如果遇到 HTTPS 信任错误，运行 `npx office-addin-dev-certs verify` 检查证书，必要时重新安装。
-- 使用本地侧载的加载项时，确认开发服务器仍在 `https://localhost:3000` 运行。
-- 如果问题仍然存在，清理 Office 缓存。
+```bash
+npm stop
+```
 
-更多帮助请参阅 [Office 加载项开发错误排查](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-development-errors)，或[向本项目反馈问题](https://github.com/siyuhong/Mermaid-Word-AddIn/issues)。
+## 部署指南
 
-## 参考资源
+- [Cloudflare Pages 部署](docs/cloudflare-pages.zh-CN.md)
 
+## 问题反馈
+
+- **部署版**：见 [验证部署](docs/cloudflare-pages.zh-CN.md#5-验证部署)。
+- **本地开发版**：任务窗格加载失败时，运行 `npx office-addin-dev-certs verify` 检查本地 HTTPS 证书；若提示需要安装，执行 `npx office-addin-dev-certs install` 并信任证书。
+
+仍未解决时，请 [提交 Issue](https://github.com/siyuhong/Mermaid-Word-AddIn/issues)
+
+## 参考资料
+
+- [Mermaid 文档](https://mermaid.js.org/)
 - [Office 加载项文档](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins)
 - [Word JavaScript API 参考](https://learn.microsoft.com/javascript/api/word)
-- [Mermaid 文档](https://mermaid.js.org/)
-- [在 Office 网页版中侧载加载项](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)
+- [在 Office 中侧载加载项进行测试](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)
+- [Office 加载项开发错误排查](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-development-errors)
 
 ## 许可证
 
 MIT License，详见 [LICENSE](LICENSE)。
-
-Copyright (c) 2024 Microsoft Corporation. All rights reserved.

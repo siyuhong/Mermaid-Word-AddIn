@@ -1,184 +1,212 @@
-# Mermaid Diagram Word Add-in
+<p align="center">
+  <img src="assets/logo-filled.png" alt="Mermaid Word Add-in" width="120">
+</p>
+
+<h1 align="center">Mermaid Word AddIn</h1>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://mermaid-word-addin.pages.dev/"><img src="https://img.shields.io/static/v1?label=Deployed%20site&message=mermaid--word--addin.pages.dev&color=2b579a" alt="Deployed site"></a>
+</p>
 
 **English** | [简体中文](README.zh-CN.md)
 
-A Microsoft Word add-in for writing Mermaid code, previewing diagrams, and inserting them into a document as PNG images. Each inserted image stores its Mermaid source in its alternative text so you can select it and edit the diagram again.
+> A Mermaid diagramming tool built for Microsoft Word: live preview and one-click insertion of high-resolution images.
+>
+> The Mermaid source is saved with each diagram, so you can select an image and edit it again.
 
-Built with React 18, Fluent UI v9, and CodeMirror 6 for an enhanced editing experience.
+## Contents
+
+- [Contents](#contents)
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Word on the web](#word-on-the-web)
+  - [Word for Windows (desktop)](#word-for-windows-desktop)
+- [Developer Guide](#developer-guide)
+  - [Environment](#environment)
+  - [Install and start](#install-and-start)
+  - [Build and debug](#build-and-debug)
+- [Deployment](#deployment)
+- [Troubleshooting and Feedback](#troubleshooting-and-feedback)
+- [References](#references)
+- [License](#license)
 
 ## Features
 
-- **Interactive Diagram Editor**: Full-featured code editor with syntax highlighting for Mermaid diagram syntax
-- **Real-time Preview**: See your diagrams rendered in real-time as you type
-- **Multiple Diagram Types**: Supports diagram syntax available in the project's Mermaid 10.x dependency, including:
-  - Flowcharts
-  - Sequence diagrams
-  - Class diagrams
-  - State diagrams
-  - Entity Relationship diagrams
-  - Gantt charts
-  - Pie charts
-  - And more!
-- **Syntax Highlighting**: Enhanced CodeMirror 6 editor with Mermaid-specific syntax highlighting
-- **Auto-completion**: Smart auto-completion for Mermaid keywords, diagram types, and syntax
-- **Line Wrapping**: Automatic line wrapping for better readability of long lines
-- **Preview Navigation**: Zoom in, zoom out, reset the view, and drag to pan
-- **Theme Selection**: Choose from multiple Mermaid themes (default, forest, dark, neutral)
-- **Edit Existing Diagrams**: Select an inserted diagram in Word and click "Edit Selected" to modify it
-- **High-Quality Output**: Diagrams are inserted as high-quality PNG images optimized for Word documents
+- **Multiple diagram types**: Flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, Gantt charts, pie charts, mindmaps, and more.
 
-## Prerequisites
+  <table>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-flowchart.png"><img src="docs/images/diagram-flowchart.png" alt="Flowchart: describing decisions and processing steps" width="300" height="225"></a>
+        <br>
+        <sub>Flowchart</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-sequence.png"><img src="docs/images/diagram-sequence.png" alt="Sequence diagram: interactions between participants" width="300" height="225"></a>
+        <br>
+        <sub>Sequence diagram</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-class.png"><img src="docs/images/diagram-class.png" alt="Class diagram: objects, attributes, and methods" width="300" height="225"></a>
+        <br>
+        <sub>Class diagram</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-state.png"><img src="docs/images/diagram-state.png" alt="State diagram: states and lifecycle transitions" width="300" height="225"></a>
+        <br>
+        <sub>State diagram</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-er.png"><img src="docs/images/diagram-er.png" alt="ER diagram: data entities and relationships" width="300" height="225"></a>
+        <br>
+        <sub>ER diagram</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-gantt.png"><img src="docs/images/diagram-gantt.png" alt="Gantt chart: tasks and project schedule" width="300" height="225"></a>
+        <br>
+        <sub>Gantt chart</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-pie.png"><img src="docs/images/diagram-pie.png" alt="Pie chart: comparing proportions" width="300" height="225"></a>
+        <br>
+        <sub>Pie chart</sub>
+      </td>
+      <td align="center" valign="middle" width="50%" height="255">
+        <a href="docs/images/diagram-mindmap.png"><img src="docs/images/diagram-mindmap.png" alt="Mindmap: expanding topics and hierarchy" width="300" height="225"></a>
+        <br>
+        <sub>Mindmap</sub>
+      </td>
+    </tr>
+  </table>
 
-- **Node.js**: Latest LTS version. Visit the [Node.js site](https://nodejs.org/) to download and install. Verify installation with `node -v` and `npm -v`.
-- **Git**: Required to clone the repository.
-- **Word Desktop**: The commands below target desktop Word. For the included Windows debugging configuration, use an up-to-date Microsoft 365 Word installation with Edge Chromium/WebView2. Internet Explorer (Trident) and Edge Legacy (EdgeHTML) webviews are not supported.
+  The syntax supported by this project follows Mermaid 10.x. See the [Mermaid documentation](https://mermaid.js.org/) for more examples and version-specific limitations.
 
-The Mermaid documentation may describe newer syntax that is unavailable in Mermaid 10.x. Check the installed version when using examples from newer releases.
+- **Rich editing experience**: Mermaid syntax highlighting, keyword completion, code folding, inline syntax diagnostics, and line wrapping. Flowcharts, sequence diagrams, mindmaps, pie charts, journeys, requirement diagrams, and Gantt charts are fully highlighted by the upstream grammar; class, state, ER, Git graph, and timeline diagrams use a lighter lexical highlighter.
+- **Live preview**: See the rendered diagram while you edit. Zoom with the mouse wheel or the zoom buttons, reset the view, and drag to pan around larger diagrams.
+- **Zoom-driven insert size**: The preview zoom level also sets the inserted image size. At 100%, the diagram is inserted at its natural size, capped to the writable page area; zooming out shrinks the inserted image.
+- **Theme selection**: Switch between the default, forest, dark, and neutral Mermaid themes.
+- **Re-edit inserted diagrams**: Select an image created by the add-in, click **Edit Selected**, update the source, and replace the original diagram.
+- **High-quality output**: Diagrams are fitted to the available page area and inserted as high-resolution PNG images.
 
-## Installation & Setup
+## Quick Start
 
-1. Clone the repository and enter the project directory:
+### Word on the web
 
-   ```bash
-   git clone https://github.com/siyuhong/Mermaid-Word-AddIn.git
-   cd Mermaid-Word-AddIn
-   ```
+1. Open an editable document in [Word on the web](https://word.cloud.microsoft), then go to **Home → Add-ins → More Add-ins**. Depending on your version, the entry point may be labeled **More Settings**.
 
-2. Install dependencies:
+   ![Word on the web: open Add-ins from the Home tab and choose More Add-ins](docs/images/word-web-01-open-addins.png)
 
-   ```bash
-   npm install
-   ```
+2. Switch to **My Add-ins**, expand **Manage My Add-ins**, click **Upload My Add-in**, and select the downloaded `manifest.xml`.
 
-3. On first setup, install the local HTTPS development certificate and accept the system trust prompt:
+   ![Office Add-ins dialog: choose Upload My Add-in from the Manage My Add-ins menu](docs/images/word-web-02-upload-manifest.png)
 
-   ```bash
-   npx office-addin-dev-certs install
-   ```
+3. On the **Insert** tab, click **Mermaid Editor**. The editor and preview pane open on the right.
 
-4. Start the development server at `https://localhost:3000` and keep this terminal running:
+   ![Word on the web: open Mermaid Editor from the Insert tab](docs/images/word-web-03-open-editor.png)
 
-   ```bash
-   npm run dev-server
-   ```
+### Word for Windows (desktop)
 
-5. Open another terminal in the project directory and sideload the add-in into Word:
+1. **Create a shared folder.** Create a folder for the add-in manifest and put the downloaded `manifest.xml` in it. Right-click the folder, open **Properties → Sharing → Share...**, grant access to the Windows account that will use the add-in, and finish sharing. Copy the resulting network path.
 
-   ```bash
-   npm start
-   ```
+   ![Windows folder properties: click Share on the Sharing tab](docs/images/word-windows-01-share-folder.png)
 
-When finished, run `npm stop` to remove the development add-in. Stop the manually started development server with `Ctrl+C` in its terminal.
+2. **Add a trusted add-in catalog.** In Word, go to **File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs**. Paste the network path from the previous step into **Catalog Url**, click **Add catalog**, select **Show in Menu** for the new entry, and close the settings windows with **OK**.
 
-## Development
+   ![Office Trust Center settings](docs/images/word-windows-02-trusted-setting.png)
 
-### Run the add-in using Office Add-ins Development Kit
+   ![Office Trust Center: add the shared folder URL, select Show in Menu, and click OK](docs/images/word-windows-03-trusted-catalog.png)
 
-1. **Install Office Add-ins Development Kit In Visual Studio Code**
+3. **Restart Word and install the add-in.** Reopen Word, go to **Developer → Add-ins**, select **Shared Folder** in the Office Add-ins dialog, choose this add-in, and click **Add**.
 
-   Search for Office Add-ins Development Kit in VSCode extension and install it.
+   ![Install the add-in from the shared folder](docs/images/word-windows-04-install.png)
 
-2. **Preview Your Office Add-in (F5)**
+   Then open **Mermaid Editor** from the **Insert** tab.
 
-   Select **Preview Your Office Add-in(F5)** to launch the add-in. In the Quick Pick menu, select **Word Desktop (Edge Chromium)**.
+   ![Mermaid Editor running in Word](docs/images/word-windows-05-used.png)
 
-   The extension checks prerequisites before debugging starts. After verification, Word launches with the add-in sideloaded.
+## Developer Guide
 
-3. **Stop Previewing Your Office Add-in**
+### Environment
 
-   Once finished testing, select **Stop Previewing Your Office Add-in** to end the debugging session and remove the sideloaded add-in. Stop any manually started development server separately.
+- Node.js and npm
+- Git
+- Word
 
-### Project Scripts
+### Install and start
 
-- `npm run build` - Build for production
-- `npm run build:dev` - Build for development
-- `npm run dev-server` - Start development server with hot reload
-- `npm start` - Sideload the add-in to Word
-- `npm stop` - Remove the add-in from Word
-- `npm run validate` - Validate the manifest file
-- `npm run validate:production` - Validate the generated `dist/manifest.xml` for production
-- `npm run lint` - Check code style
-- `npm run lint:fix` - Auto-fix code style issues
-- `npm run prettier` - Format source files
-- `npm run watch` - Rebuild when source files change
+Clone the repository and change into the project directory:
 
-### Production Deployment
-
-`npm run build` writes the production files to `dist/`; it does not publish them. Set `ADDIN_BASE_URL` to your deployed HTTPS site URL before building. A production build fails if this variable is missing or points to localhost or the Contoso placeholder.
-
-```powershell
-$env:ADDIN_BASE_URL = "https://your-project.pages.dev/"
-npm run build
+```bash
+git clone https://github.com/siyuhong/Mermaid-Word-AddIn.git
+cd Mermaid-Word-AddIn
 ```
 
-The generated `dist/manifest.xml` uses the configured site for the pages, icons, help link, and app domain. The source manifest remains configured for local development. Deploy the contents of `dist/`, run `npm run validate:production`, and share the site homepage or the generated manifest with testers. The homepage includes a manifest download and sideloading instructions.
+Install dependencies:
 
-See the [Cloudflare Pages deployment guide (Chinese)](docs/cloudflare-pages.zh-CN.md) for Git integration, direct uploads, and user installation steps. Microsoft supports sideloading for development/testing, not as a production distribution channel.
+```bash
+npm install
+```
 
-## Using the Add-in
+### Build and debug
 
-1. Open Word and find the **Mermaid Editor** button in the Insert tab
-2. Click to open the task pane
-3. Write your Mermaid diagram code in the editor (or use the default example)
-4. Preview the rendered diagram in the preview pane
-5. Optionally select a theme from the dropdown
-6. Wait for the preview to finish, place the Word cursor where you want the image, and click **Insert | Replace**. If text or an image is selected in Word, that selection is replaced.
-7. To edit an existing diagram:
-   - Select the diagram image in Word
-   - Click **Edit Selected** in the task pane
-   - The diagram code will load into the editor
-   - Make your changes and wait for the updated preview
-   - Keep the original image selected, or select it again, then click **Insert | Replace** to replace it
+Build a development version:
 
-The insert button stays disabled while code or theme changes are being rendered. **Edit Selected** is available for inline images inserted by this add-in that still contain the Mermaid title and source in their alternative text. Keep that metadata intact if you want to edit the image later. Replacement always uses the current Word selection; it is not permanently linked to the image whose source was loaded.
+```bash
+npm run build:dev
+```
 
-An explicit theme in a Mermaid initialization directive or YAML configuration takes precedence over the theme dropdown.
+On first setup, install the local HTTPS development certificate and trust it when the system prompts:
 
-## Project Structure
+```bash
+npx office-addin-dev-certs install
+```
 
-- `/src/taskpane/`
-  - `index.jsx` - React entry point with Office.js initialization
-  - `taskpane.js` - Word JavaScript API integration
-  - `components/MermaidEditor.jsx` - Main editor component
-  - `components/enhancedMermaidLanguage.js` - Enhanced Mermaid language support for CodeMirror
-  - `utils/diagramUtils.js` - Diagram detection and utility functions
-  - `utils/mermaidRenderer.js` - Queued Mermaid rendering and export configuration
-- `/assets/` - Add-in icons and images
-- `/src/commands/` - Add-in command callbacks and host page
-- `/dist/` - Generated build output; do not edit manually
-- `manifest.xml` - Add-in manifest configuration
-- `webpack.config.js` - Webpack bundler configuration
+Start the development server:
 
-## Key Technologies
+```bash
+npm run dev-server
+```
 
-- **React 18** - UI framework
-- **Fluent UI v9** - Microsoft's design system
-- **CodeMirror 6** - Code editor with syntax highlighting
-- **Mermaid.js** - Diagram rendering engine
-- **Office.js** - Word JavaScript API
-- **Webpack** - Module bundler
+In another terminal, sideload the add-in into Word:
 
-## Troubleshooting
+```bash
+npm start
+```
 
-If you have problems running the add-in:
+When you are done debugging, remove the development add-in:
 
-- Close any open instances of Word
-- Stop debugging with **Stop Previewing Your Office Add-in** or `npm stop`; stop a manually started development server with `Ctrl+C`
-- For HTTPS trust errors, run `npx office-addin-dev-certs verify` and reinstall the certificate if needed
-- Confirm that the development server is running at `https://localhost:3000` while using the locally sideloaded add-in
-- Clear the Office cache (if issues persist)
+```bash
+npm stop
+```
 
-For more help, see [troubleshoot development errors](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-development-errors) or [report a project issue](https://github.com/siyuhong/Mermaid-Word-AddIn/issues).
+## Deployment
 
-## Additional Resources
+- [Cloudflare Pages deployment](docs/cloudflare-pages.md)
 
-- [Office Add-ins Documentation](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins)
-- [Word JavaScript API Reference](https://learn.microsoft.com/javascript/api/word)
-- [Mermaid Documentation](https://mermaid.js.org/)
-- [Sideload Office Add-ins to Office on the web](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)
+## Troubleshooting and Feedback
+
+- **Deployed add-in**: see [Verify the deployment](docs/cloudflare-pages.md#5-verify-the-deployment).
+- **Local development build**: if the task pane fails to load, run `npx office-addin-dev-certs verify` to check the local HTTPS certificate. If it asks you to install the certificate, run `npx office-addin-dev-certs install` and trust it.
+
+If the problem persists, [open an issue](https://github.com/siyuhong/Mermaid-Word-AddIn/issues).
+
+## References
+
+- [Mermaid documentation](https://mermaid.js.org/)
+- [Office Add-ins documentation](https://learn.microsoft.com/office/dev/add-ins/overview/office-add-ins)
+- [Word JavaScript API reference](https://learn.microsoft.com/javascript/api/word)
+- [Sideload Office Add-ins for testing](https://learn.microsoft.com/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)
+- [Troubleshoot Office Add-in development errors](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-development-errors)
 
 ## License
 
 MIT License. See [LICENSE](LICENSE).
 
-Copyright (c) 2024 Microsoft Corporation. All rights reserved.
+Copyright (c) 2026 siyuhong. All rights reserved.
