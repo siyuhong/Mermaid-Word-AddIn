@@ -13,6 +13,7 @@ import {
   sequenceLanguage,
 } from "codemirror-lang-mermaid";
 import { scanDocument } from "./mermaidFallbackSyntax";
+import { DIAGRAMS, detectSyntax, getKeywordsForSyntax } from "../utils/diagramRegistry";
 
 const FLOWCHART_EXTRA_STYLE_TAGS = {
   StyleKeyword: t.keyword,
@@ -69,29 +70,10 @@ const patchedMermaidLanguage = mermaidLanguage.configure({
   }),
 });
 
-const MERMAID_KEYWORDS = [
-  { label: "flowchart", type: "keyword", info: "Create a flowchart diagram" },
-  { label: "graph", type: "keyword", info: "Create a graph diagram" },
-  { label: "sequenceDiagram", type: "keyword", info: "Create a sequence diagram" },
-  { label: "classDiagram", type: "keyword", info: "Create a class diagram" },
-  { label: "stateDiagram", type: "keyword", info: "Create a state diagram" },
-  { label: "stateDiagram-v2", type: "keyword", info: "Create a state diagram v2" },
-  { label: "gantt", type: "keyword", info: "Create a Gantt chart" },
-  { label: "pie", type: "keyword", info: "Create a pie chart" },
-  { label: "journey", type: "keyword", info: "Create a journey diagram" },
-  { label: "erDiagram", type: "keyword", info: "Create an entity relationship diagram" },
-  { label: "gitGraph", type: "keyword", info: "Create a git graph" },
-  { label: "timeline", type: "keyword", info: "Create a timeline" },
-  { label: "quadrantChart", type: "keyword", info: "Create a quadrant chart" },
-  { label: "requirementDiagram", type: "keyword", info: "Create a requirement diagram" },
-  { label: "sankey-beta", type: "keyword", info: "Create a Sankey diagram (beta)" },
-  { label: "block-beta", type: "keyword", info: "Create a block diagram (beta)" },
-  { label: "xychart-beta", type: "keyword", info: "Create an XY chart (beta)" },
-  { label: "C4Context", type: "keyword", info: "Create a C4 context diagram" },
-  { label: "C4Container", type: "keyword", info: "Create a C4 container diagram" },
-  { label: "C4Component", type: "keyword", info: "Create a C4 component diagram" },
-  { label: "C4Dynamic", type: "keyword", info: "Create a C4 dynamic diagram" },
-
+// Statements and operators offered for every diagram type. Header keywords are
+// generated from the registry at completion time, so a new Mermaid type shows
+// up without touching this list.
+const STATEMENT_KEYWORDS = [
   { label: "subgraph", type: "keyword", info: "Define a subgraph" },
   { label: "end", type: "keyword", info: "End a block" },
   { label: "linkStyle", type: "keyword", info: "Set link styles" },
@@ -159,17 +141,61 @@ const MERMAID_KEYWORDS = [
   { label: "---", type: "arrow", info: "Dashed line" },
 ];
 
+// Header completion entries, built from the registry so the list always matches
+// what the bundled Mermaid engine can actually render.
+const SYNTAX_KEYWORDS = DIAGRAMS.map((diagram) => ({
+  label: diagram.syntax,
+  type: "keyword",
+  info: diagram.label,
+}));
+
+// Aliases are kept out of the registry-derived list (C4 alone would add forty
+// element names), but `graph` is common enough to deserve an entry.
+const EXTRA_HEADER_KEYWORDS = [
+  { label: "graph", type: "keyword", info: "Flowchart (graph alias)" },
+];
+
+const mergeOptions = (groups) => {
+  const seen = new Set();
+  const merged = [];
+  for (const option of groups.flat()) {
+    if (seen.has(option.label)) {
+      continue;
+    }
+    seen.add(option.label);
+    merged.push(option);
+  }
+  return merged;
+};
+
 export function mermaidCompletion(context) {
   const word = context.matchBefore(/\w*/);
   if (word.from === word.to && !context.explicit) {
     return null;
   }
 
+  const syntax = detectSyntax(context.state.doc.toString());
+  // Once the header names a type, its own statements are worth offering too;
+  // before that only generic statements make sense.
+  const typedKeywords = syntax
+    ? getKeywordsForSyntax(syntax).map((label) => ({
+        label,
+        type: "keyword",
+        info: `${syntax} statement`,
+      }))
+    : [];
+
+  const options = mergeOptions([
+    SYNTAX_KEYWORDS,
+    EXTRA_HEADER_KEYWORDS,
+    typedKeywords,
+    STATEMENT_KEYWORDS,
+  ]);
+  const prefix = word.text.toLowerCase();
+
   return {
     from: word.from,
-    options: MERMAID_KEYWORDS.filter((keyword) =>
-      keyword.label.toLowerCase().startsWith(word.text.toLowerCase())
-    ),
+    options: options.filter((keyword) => keyword.label.toLowerCase().startsWith(prefix)),
   };
 }
 
@@ -234,7 +260,7 @@ const buildDecorations = (state) => {
   const candidates = [];
   // Parsed diagrams already carry node and string colours from the grammar, so
   // only comments, directives and frontmatter need scanning there. That also
-  // keeps the per-keystroke cost low for the seven fully supported diagrams.
+  // keeps the per-keystroke cost low for the diagrams with a Lezer grammar.
   const scanned = scanDocument(state.doc, !unparsed);
 
   for (const item of scanned) {

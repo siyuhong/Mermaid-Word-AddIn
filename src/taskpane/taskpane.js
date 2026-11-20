@@ -1,28 +1,14 @@
-/* global Word console, document, Image, btoa, URL, Blob */
+/* global Word console, document, Image, btoa, URL, Blob, FileReader */
 
-import { readSvgGeometry, fitIntoBox } from "./utils/diagramUtils";
-
-// Constants for Word page dimensions
-// Default fallback values: US Letter size (8.5" x 11" = 612 x 792 points) with 1" margins (72 points)
-// 1 point = 1/72 inch (Word uses points for sizing)
-const DEFAULT_PAGE_WIDTH_POINTS = 612; // 8.5 inches
-const DEFAULT_PAGE_HEIGHT_POINTS = 792; // 11 inches
-const DEFAULT_MARGIN_POINTS = 72; // 1 inch margins
-const POINTS_PER_INCH = 72;
-const PNG_DPI = 300; // Use 300 DPI for high-quality PNG export
-const PIXELS_PER_POINT = PNG_DPI / POINTS_PER_INCH; // 4.167 pixels per point at 300 DPI
-const MIN_DIAGRAM_SIZE_POINTS = 144; // 2 inches minimum
-const DEFAULT_INSERT_SCALE = 1;
-const MIN_INSERT_SCALE = 0.1;
-const MAX_INSERT_SCALE = 10;
-
-function normalizeInsertScale(value) {
-  const parsed = typeof value === "number" ? value : parseFloat(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_INSERT_SCALE;
-  }
-  return Math.min(Math.max(parsed, MIN_INSERT_SCALE), MAX_INSERT_SCALE);
-}
+import { readSvgGeometry } from "./utils/diagramUtils";
+import { DEFAULT_PAGE_DIMENSIONS, getDiagramInsertLayout } from "./utils/diagramSizing";
+import { prepareSvgForRasterization } from "./utils/svgSanitizer";
+import { createSvgPictureOoxml } from "./utils/wordSvg";
+import {
+  decodeMermaidSource,
+  encodeMermaidSource,
+  MERMAID_IMAGE_TITLE,
+} from "./utils/diagramMetadata";
 
 // Get actual page dimensions and margins from the document
 export async function getDocumentPageDimensions() {
@@ -69,14 +55,7 @@ export async function getDocumentPageDimensions() {
   } catch (error) {
     console.log("Could not retrieve page dimensions from document, using defaults:", error);
     // Fallback to default values if retrieval fails
-    return {
-      pageWidth: DEFAULT_PAGE_WIDTH_POINTS,
-      pageHeight: DEFAULT_PAGE_HEIGHT_POINTS,
-      marginLeft: DEFAULT_MARGIN_POINTS,
-      marginRight: DEFAULT_MARGIN_POINTS,
-      marginTop: DEFAULT_MARGIN_POINTS,
-      marginBottom: DEFAULT_MARGIN_POINTS,
-    };
+    return { ...DEFAULT_PAGE_DIMENSIONS };
   }
 }
 
@@ -93,23 +72,34 @@ export async function insertText(text) {
   }
 }
 
-function normalizePageDimensions(pageDimensions) {
-  const layout = pageDimensions || {};
-
-  const ensure = (value, fallback) =>
-    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-
-  return {
-    pageWidth: ensure(layout.pageWidth, DEFAULT_PAGE_WIDTH_POINTS),
-    pageHeight: ensure(layout.pageHeight, DEFAULT_PAGE_HEIGHT_POINTS),
-    marginLeft: ensure(layout.marginLeft, DEFAULT_MARGIN_POINTS),
-    marginRight: ensure(layout.marginRight, DEFAULT_MARGIN_POINTS),
-    marginTop: ensure(layout.marginTop, DEFAULT_MARGIN_POINTS),
-    marginBottom: ensure(layout.marginBottom, DEFAULT_MARGIN_POINTS),
-  };
+// toBlob keeps the PNG in the binary domain; toDataURL would build one huge
+// string per attempt and copy it again when base64-encoded for Office.js.
+function canvasToBase64Png(canvas) {
+  return new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Canvas export produced no image"));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === "string" ? reader.result : "";
+          const comma = result.indexOf(",");
+          resolve(comma >= 0 ? result.slice(comma + 1) : "");
+        };
+        reader.onerror = () => reject(new Error("Could not read the rendered PNG"));
+        reader.readAsDataURL(blob);
+      }, "image/png");
+    } catch (error) {
+      // SecurityError: the SVG still contained HTML content. Let the caller
+      // classify it instead of reporting a generic canvas failure.
+      reject(error);
+    }
+  });
 }
 
-async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
+async function svgToBase64Png(svgContent, layout) {
   return new Promise((resolve, reject) => {
     let objectUrl = null;
     let hasRetriedWithDataUrl = false;
@@ -126,7 +116,7 @@ async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
       const img = new Image();
       img.crossOrigin = "anonymous";
 
-      img.onload = () => {
+      img.onload = async () => {
         try {
           if (
             objectUrl &&
@@ -137,19 +127,18 @@ async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
             objectUrl = null;
           }
 
-          // The SVG was normalised at render time and preview uses the same
-          // geometry, so the canvas keeps exactly the same aspect ratio.
-          console.log("Rasterising SVG geometry:", geometry.width, "x", geometry.height);
-          const { width: displayWidth, height: displayHeight } = targetDisplaySize;
+          const { width: displayWidth, height: displayHeight } = layout.displaySize;
+          const { width: canvasWidth, height: canvasHeight } = layout.rasterSize;
+          const { effectiveDpi } = layout;
 
-          // Calculate 300 DPI pixel dimensions for the target display size
-          const canvasWidth = Math.max(Math.round(displayWidth * PIXELS_PER_POINT), 1);
-          const canvasHeight = Math.max(Math.round(displayHeight * PIXELS_PER_POINT), 1);
+          console.log(
+            `Creating PNG ${canvasWidth}x${canvasHeight}px (${effectiveDpi} DPI) for`,
+            displayWidth,
+            "x",
+            displayHeight,
+            "pt"
+          );
 
-          console.log("Creating 300 DPI PNG:", canvasWidth, "x", canvasHeight, "pixels");
-          console.log("For display size:", displayWidth, "x", displayHeight, "points");
-
-          // Set canvas to 300 DPI resolution for target display size
           canvas.width = canvasWidth;
           canvas.height = canvasHeight;
 
@@ -164,10 +153,9 @@ async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
           // Draw the SVG scaled to fill the canvas exactly
           ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
 
-          // Convert to PNG with maximum quality
-          const pngBase64 = canvas.toDataURL("image/png", 1.0).split(",")[1];
+          const pngBase64 = await canvasToBase64Png(canvas);
 
-          console.log("300 DPI PNG created successfully");
+          console.log("PNG created successfully at", effectiveDpi, "DPI");
 
           // Return display size in points (Word's unit), not pixel size
           resolve({ base64: pngBase64, width: displayWidth, height: displayHeight });
@@ -191,22 +179,9 @@ async function svgToBase64Png(svgContent, geometry, targetDisplaySize) {
         reject(new Error("Failed to load SVG image"));
       };
 
-      // Fix SVG content to ensure proper namespace and dimensions
-      let fixedSvgContent = svgContent;
-      if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
-        fixedSvgContent = svgContent.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-      }
-      if (!fixedSvgContent.includes('xmlns:xlink="http://www.w3.org/1999/xlink"')) {
-        fixedSvgContent = fixedSvgContent.replace(
-          "<svg",
-          '<svg xmlns:xlink="http://www.w3.org/1999/xlink"'
-        );
-      }
-
-      // Remove any potential external references that could cause CORS issues
-      fixedSvgContent = fixedSvgContent.replace(/href="http[^"]*"/g, "");
-      fixedSvgContent = fixedSvgContent.replace(/xlink:href="http[^"]*"/g, "");
-      fixedSvgContent = fixedSvgContent.replace(/@import[^;]*;/g, "");
+      // Decode the SVG at the final pixel dimensions as well as drawing it
+      // onto a large canvas, avoiding an intermediate low-resolution image.
+      const fixedSvgContent = prepareSvgForRasterization(svgContent, layout.rasterSize);
 
       // Create a data URL directly from the SVG to avoid CORS issues
       const svgBase64 = btoa(unescape(encodeURIComponent(fixedSvgContent)));
@@ -242,10 +217,10 @@ export async function getSelectedImageAltText() {
 
       const selectedPicture = inlinePictures.items[0];
       if (
-        selectedPicture.altTextTitle === "Mermaid Diagram" &&
+        selectedPicture.altTextTitle === MERMAID_IMAGE_TITLE &&
         selectedPicture.altTextDescription
       ) {
-        return selectedPicture.altTextDescription;
+        return decodeMermaidSource(selectedPicture.altTextDescription);
       }
 
       return null;
@@ -257,10 +232,12 @@ export async function getSelectedImageAltText() {
 }
 
 export async function insertDiagram(svgContent, mermaidCode, options = {}) {
-  // Insert diagram as PNG with proper scaling for Word document
+  const format = options.format || "png";
   try {
+    if (format !== "png" && format !== "svg") {
+      throw new Error(`Unsupported image format: ${format}`);
+    }
     console.log("Starting diagram insertion with optimized sizing...");
-    console.log("SVG content length:", svgContent.length);
 
     // Validate SVG content
     if (!svgContent || typeof svgContent !== "string") {
@@ -271,8 +248,7 @@ export async function insertDiagram(svgContent, mermaidCode, options = {}) {
       throw new Error("SVG content does not contain valid SVG markup");
     }
 
-    // One geometry reader and one aspect-preserving fit, identical to the
-    // task pane preview. No diagram-type specific sizes anywhere.
+    // Keep the export aspect ratio independent of the preview viewport.
     const geometry = readSvgGeometry(svgContent);
     console.log("SVG intrinsic geometry:", geometry);
 
@@ -287,32 +263,13 @@ export async function insertDiagram(svgContent, mermaidCode, options = {}) {
     }
 
     // Get actual page dimensions from the document
-    const pageDimensions = normalizePageDimensions(await getDocumentPageDimensions());
+    const pageDimensions = await getDocumentPageDimensions();
     console.log("Page dimensions:", pageDimensions);
+    const layout = getDiagramInsertLayout(geometry, pageDimensions, options);
+    console.log("Calculated target display size (points):", layout.displaySize);
 
-    const maxWidth =
-      Math.max(
-        pageDimensions.pageWidth - pageDimensions.marginLeft - pageDimensions.marginRight,
-        MIN_DIAGRAM_SIZE_POINTS
-      ) * 0.9;
-    const maxHeight =
-      Math.max(
-        pageDimensions.pageHeight - pageDimensions.marginTop - pageDimensions.marginBottom,
-        MIN_DIAGRAM_SIZE_POINTS
-      ) * 0.9;
-    // Fit into the page, but never enlarge a diagram beyond its intrinsic
-    // size. The preview zoom is then applied on top of that size, while the
-    // final image still stays inside the writable page area.
-    const insertScale = normalizeInsertScale(options.scale);
-    const targetDisplaySize = fitIntoBox(
-      geometry,
-      { width: maxWidth, height: maxHeight },
-      { scale: insertScale, allowUpscale: false, constrainToBox: true }
-    );
-    console.log("Calculated target display size (points):", targetDisplaySize);
-
-    // Convert SVG to PNG with optimal sizing
-    const pngResult = await svgToBase64Png(svgContent, geometry, targetDisplaySize);
+    // SVG also embeds a PNG fallback for Word versions without SVG rendering.
+    const pngResult = await svgToBase64Png(svgContent, layout);
 
     const pngBase64 = pngResult?.base64;
     const displayWidth = pngResult?.width;
@@ -334,17 +291,27 @@ export async function insertDiagram(svgContent, mermaidCode, options = {}) {
       throw new Error(`Invalid display dimensions: ${displayWidth}x${displayHeight}`);
     }
 
+    const ooxml =
+      format === "svg"
+        ? createSvgPictureOoxml(svgContent, pngBase64, layout.displaySize, mermaidCode)
+        : null;
     await Word.run(async (context) => {
       // Get the current selection to insert at cursor position
-      let selection = context.document.getSelection();
-      let image = selection.insertInlinePictureFromBase64(pngBase64, Word.InsertLocation.replace);
-
-      image.altTextTitle = "Mermaid Diagram";
-      image.altTextDescription = mermaidCode;
-
-      // Set image size to calculated display dimensions (in points)
-      image.width = Math.round(displayWidth);
-      image.height = Math.round(displayHeight);
+      const selection = context.document.getSelection();
+      if (format === "svg") {
+        // Metadata and size are embedded in the same drawing as the SVG.
+        // No second selection lookup or post-insertion metadata write is needed.
+        selection.insertOoxml(ooxml, Word.InsertLocation.replace);
+      } else {
+        const image = selection.insertInlinePictureFromBase64(
+          pngBase64,
+          Word.InsertLocation.replace
+        );
+        image.altTextTitle = MERMAID_IMAGE_TITLE;
+        image.altTextDescription = encodeMermaidSource(mermaidCode);
+        image.width = displayWidth;
+        image.height = displayHeight;
+      }
 
       await context.sync();
       console.log("Diagram successfully inserted into Word with optimized sizing");
@@ -353,9 +320,22 @@ export async function insertDiagram(svgContent, mermaidCode, options = {}) {
     console.error("Error inserting diagram:", error);
 
     // Provide more specific error messages for common issues
+    const rawMessage = `${error?.message || ""} ${error?.name || ""}`;
     let errorMessage = `Failed to insert diagram: ${error.message || error}`;
 
-    if (error.message && error.message.includes("InvalidArgument")) {
+    if (/tainted|securityerror|todataurl/i.test(rawMessage)) {
+      errorMessage =
+        "Failed to insert diagram: this diagram still renders HTML labels, which Word cannot store as an image. Please report this diagram type.";
+    } else if (/canvas export|could not read the rendered png|invalid base64/i.test(rawMessage)) {
+      errorMessage =
+        "Failed to insert diagram: the rendered image could not be encoded. Try splitting the diagram into smaller sections.";
+    } else if (
+      format === "svg" &&
+      /InvalidArgument|NotImplemented|NotSupported|insertOoxml/i.test(rawMessage)
+    ) {
+      errorMessage =
+        "Failed to insert SVG: this Word version could not import the vector image. Select PNG in the format menu and try again.";
+    } else if (error.message && error.message.includes("InvalidArgument")) {
       errorMessage =
         "Failed to insert diagram: Invalid argument. This may be caused by invalid SVG content or dimensions. Please check your Mermaid syntax.";
     } else if (error.message && error.message.includes("base64")) {

@@ -5,9 +5,16 @@ import {
   Text,
   Button,
   makeStyles,
+  mergeClasses,
   tokens,
   Dropdown,
   Option,
+  SplitButton,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItemRadio,
 } from "@fluentui/react-components";
 import CodeMirror from "@uiw/react-codemirror";
 import mermaidLanguageExtensions, { mermaidCompletion } from "./mermaidLanguage";
@@ -25,19 +32,33 @@ import { foldByIndent } from "codemirror-lang-mermaid";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
 import { renderMermaidSvg } from "../utils/mermaidRenderer";
 import { readSvgGeometry, fitIntoBox } from "../utils/diagramUtils";
+import { DIAGRAM_EXAMPLES } from "../utils/diagramExamples";
 import { isOfficeDark, subscribeOfficeThemeChange } from "../utils/officeTheme";
+import { markStartup } from "../utils/startupPerformance";
 
-import { AddRegular, SubtractRegular, ArrowResetRegular } from "@fluentui/react-icons";
+import {
+  AddRegular,
+  SubtractRegular,
+  ArrowResetRegular,
+  CheckmarkFilled,
+} from "@fluentui/react-icons";
 
-const DEFAULT_DIAGRAM = `flowchart LR
-A[Hard] -->|Text| B(Round)
-B --> C{Decision}
-C -->|One| D[Result 1]
-C -->|Two| E[Result 2]
-`;
+const DEFAULT_DIAGRAM = DIAGRAM_EXAMPLES[0].code;
+const PREVIEW_DEBOUNCE_MS = 200;
+const MERMAID_THEMES = [
+  { value: "default", label: "Default" },
+  { value: "dark", label: "Dark" },
+  { value: "forest", label: "Forest" },
+  { value: "neutral", label: "Neutral" },
+];
+const OFFICE_STATUS_MESSAGES = {
+  unavailable: "Open this add-in in Word to insert or edit document diagrams.",
+  error: "Could not connect to Word. Reopen the pane to try again.",
+};
+const markEditorReady = () => markStartup("editor-ready");
 
-// Mermaid 10 wraps requirement body text at a fixed 30 characters, but draws
-// it into a rect whose default width is only 200px. Widen the rect so wrapped
+// Mermaid wraps requirement body text at a fixed 30 characters, but draws it
+// into a rect whose default width is only 200px. Widen the rect so wrapped
 // lines (about 210px at 14px) fit inside the box.
 const REQUIREMENT_MIN_RECT_WIDTH = 300;
 
@@ -83,7 +104,7 @@ const useStyles = makeStyles({
     gap: "16px",
     padding: "24px 20px 32px",
     minHeight: "100vh",
-    paddingBottom: "100px", // Extra padding to ensure content doesn't hide behind sticky buttons
+    boxSizing: "border-box",
   },
   description: {
     color: tokens.colorNeutralForeground2,
@@ -96,6 +117,61 @@ const useStyles = makeStyles({
   editorField: {
     width: "100%",
     boxSizing: "border-box",
+  },
+  editorHeader: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "8px",
+  },
+  dropdownSelector: {
+    minWidth: "150px",
+    maxWidth: "100%",
+  },
+  dropdownListbox: {
+    maxHeight: "min(300px, 50vh)",
+    overflowY: "auto",
+    overscrollBehaviorY: "contain",
+  },
+  dropdownOption: {
+    '&[aria-selected="true"], &[aria-checked="true"]': {
+      backgroundColor: tokens.colorBrandBackground2,
+      color: tokens.colorBrandForeground1,
+      fontWeight: tokens.fontWeightSemibold,
+    },
+    '&[aria-selected="true"]:hover, &[aria-checked="true"]:hover': {
+      backgroundColor: tokens.colorBrandBackground2Hover,
+    },
+  },
+  formatMenu: {
+    minWidth: "160px",
+    border: "none",
+    outline: `1px solid ${tokens.colorTransparentStroke}`,
+    padding: tokens.spacingHorizontalXS,
+  },
+  formatOption: {
+    alignItems: "center",
+    color: tokens.colorNeutralForeground1,
+    padding: `${tokens.spacingVerticalSNudge} ${tokens.spacingHorizontalS}`,
+    "&:hover": {
+      color: tokens.colorNeutralForeground1Hover,
+    },
+  },
+  formatCheckmark: {
+    width: "auto",
+    height: "auto",
+    fontSize: tokens.fontSizeBase400,
+    marginTop: 0,
+    marginLeft: `calc(${tokens.spacingHorizontalXXS} * -1)`,
+    marginRight: tokens.spacingHorizontalXXS,
+    "& svg": {
+      display: "block",
+    },
+  },
+  formatOptionContent: {
+    padding: 0,
   },
   codeMirrorWrapper: {
     border: `1px solid ${tokens.colorNeutralStroke1}`,
@@ -110,10 +186,8 @@ const useStyles = makeStyles({
     marginBottom: "12px",
     gap: "12px",
   },
-  themeSelector: {
-    minWidth: "150px",
-  },
   previewContainer: {
+    position: "relative",
     width: "100%",
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
@@ -125,6 +199,15 @@ const useStyles = makeStyles({
     display: "flex", // Use flexbox for layout
     flexDirection: "column", // Stack children vertically
     userSelect: "none",
+  },
+  previewPlaceholder: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: tokens.colorNeutralForeground3,
+    pointerEvents: "none",
   },
   zoomControlsWrapper: {
     display: "flex",
@@ -172,13 +255,6 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteRedForeground1,
     fontWeight: tokens.fontWeightSemibold,
   },
-  loading: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    height: "200px",
-    color: tokens.colorNeutralForeground2,
-  },
   buttonContainer: {
     position: "sticky",
     bottom: "0",
@@ -188,6 +264,7 @@ const useStyles = makeStyles({
     zIndex: 10,
     display: "flex",
     justifyContent: "flex-end",
+    flexWrap: "wrap",
     gap: "8px",
     marginTop: "16px",
   },
@@ -195,6 +272,10 @@ const useStyles = makeStyles({
     minWidth: "44px",
     textAlign: "center",
     color: tokens.colorNeutralForeground2,
+  },
+  formatLabel: {
+    fontSize: tokens.fontSizeBase100,
+    marginLeft: tokens.spacingHorizontalXS,
   },
 });
 
@@ -218,12 +299,70 @@ const getErrorMessage = (error, fallback) => {
   return fallback;
 };
 
-const MermaidEditor = () => {
+const CenteredDropdown = (props) => {
   const styles = useStyles();
+  const [open, setOpen] = React.useState(false);
+  const listboxRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    // Wait for Fluent's popup layout and initial focus, then scroll only the
+    // listbox so opening a dropdown cannot move the surrounding task pane.
+    const centerSelectedOption = () => {
+      const listbox = listboxRef.current;
+      const selectedOption = listbox?.querySelector('[aria-selected="true"]');
+      if (!selectedOption || listbox.scrollHeight <= listbox.clientHeight) {
+        return;
+      }
+
+      const listboxRect = listbox.getBoundingClientRect();
+      const optionRect = selectedOption.getBoundingClientRect();
+      listbox.scrollTop +=
+        optionRect.top -
+        listboxRect.top -
+        listbox.clientTop -
+        (listbox.clientHeight - optionRect.height) / 2;
+    };
+    // Positioning can change the popup width and wrap options after it opens.
+    const observer = new ResizeObserver(centerSelectedOption);
+    const frame = requestAnimationFrame(() => {
+      centerSelectedOption();
+      if (listboxRef.current) {
+        observer.observe(listboxRef.current);
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [open]);
+
+  return (
+    <Dropdown
+      {...props}
+      className={styles.dropdownSelector}
+      listbox={{ className: styles.dropdownListbox, ref: listboxRef }}
+      // Only size the width automatically so positioning preserves the list's height limit.
+      positioning={{ autoSize: "width" }}
+      open={open}
+      onOpenChange={(event, data) => setOpen(data.open)}
+    />
+  );
+};
+
+const MermaidEditor = ({ officeStatus = "connecting" }) => {
+  const styles = useStyles();
+  const isOfficeReady = officeStatus === "ready";
   const [code, setCode] = React.useState(DEFAULT_DIAGRAM);
   const [error, setError] = React.useState("");
   const [renderedDiagram, setRenderedDiagram] = React.useState(null);
+  const [hasCompletedInitialRender, setHasCompletedInitialRender] = React.useState(false);
   const [isInserting, setIsInserting] = React.useState(false);
+  const [insertFormat, setInsertFormat] = React.useState("png");
   const [theme, setTheme] = React.useState("default");
   const [hasSelectedImage, setHasSelectedImage] = React.useState(false);
   const [selectedImageCode, setSelectedImageCode] = React.useState("");
@@ -243,7 +382,26 @@ const MermaidEditor = () => {
   const debounceTimerRef = React.useRef(null);
 
   const canInsert =
-    renderedDiagram?.code === code && renderedDiagram?.theme === theme && !isInserting;
+    isOfficeReady &&
+    renderedDiagram?.code === code &&
+    renderedDiagram?.theme === theme &&
+    !isInserting;
+
+  React.useEffect(() => {
+    if (canInsert) {
+      markStartup("insert-enabled");
+    }
+  }, [canInsert]);
+
+  // Derive selection from the editor so pasting, undoing, and re-editing a Word
+  // image stay in sync. Modified code is no longer marked as an exact example.
+  const selectedExample = React.useMemo(
+    () =>
+      DIAGRAM_EXAMPLES.find(
+        (example) => example.code.trim() === code.replace(/\r\n?/g, "\n").trim()
+      ),
+    [code]
+  );
 
   const editorExtensions = React.useMemo(
     () => createEditorExtensions(isDarkOfficeTheme),
@@ -419,8 +577,8 @@ const MermaidEditor = () => {
       (parseFloat(computedStyle.paddingTop) || 0) + (parseFloat(computedStyle.paddingBottom) || 0);
     const availableWidth = Math.max(rect.width - horizontalPadding, 1);
     const availableHeight = Math.max(rect.height - verticalPadding, 1);
-    // Base scale is the diagram's intrinsic size (1 SVG unit = 1 CSS px), so
-    // the percentage readout means the same thing for preview and insertion.
+    // Base scale is the diagram's intrinsic size (1 SVG unit = 1 CSS px).
+    // The user-controlled zoom also scales the natural insertion size.
     // Only shrink automatically when the intrinsic size does not fit.
     const fitted = fitIntoBox(
       geometry,
@@ -444,6 +602,13 @@ const MermaidEditor = () => {
       applyPreviewSizing();
     });
   }, [applyPreviewSizing, clearPreviewAnimationFrame]);
+
+  React.useLayoutEffect(() => {
+    if (hasCompletedInitialRender) {
+      // Fit the first SVG before painting it to avoid an oversized preview.
+      applyPreviewSizing();
+    }
+  }, [hasCompletedInitialRender, applyPreviewSizing]);
 
   // Only content/styling options here. Sizing is decided once by the shared
   // measurement viewport and fitIntoBox, never per diagram type.
@@ -489,9 +654,9 @@ const MermaidEditor = () => {
         boxMargin: 10,
         boxTextMargin: 5,
       },
-      // Mermaid 10 wraps requirement body text at 30 characters into a box
-      // whose default width is 200px. This only fixes content overflow; it is
-      // not part of the preview/insert sizing path.
+      // Mermaid wraps requirement body text at 30 characters into a box whose
+      // default width is 200px. This only fixes content overflow; it is not
+      // part of the preview/insert sizing path.
       requirement: {
         rect_min_width: REQUIREMENT_MIN_RECT_WIDTH,
         rect_min_height: 200,
@@ -523,8 +688,10 @@ const MermaidEditor = () => {
         }
 
         previewRef.current.innerHTML = svg;
+        markStartup("preview-ready");
         setError("");
         setRenderedDiagram({ svg, code, theme, config: mermaidConfig, version });
+        setHasCompletedInitialRender(true);
 
         schedulePreviewSizing();
       } catch (err) {
@@ -540,17 +707,19 @@ const MermaidEditor = () => {
 
         setError(getErrorMessage(err, "Unable to render the Mermaid preview."));
         setRenderedDiagram(null);
+        setHasCompletedInitialRender(true);
       }
     };
 
-    // Debounce rendering to improve performance
+    // Render the initial example immediately; debounce subsequent edits.
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
-    debounceTimerRef.current = setTimeout(() => {
-      renderDiagram();
-    }, 200);
+    debounceTimerRef.current = setTimeout(
+      renderDiagram,
+      renderIndexRef.current === 0 ? 0 : PREVIEW_DEBOUNCE_MS
+    );
 
     return () => {
       isActive = false;
@@ -577,8 +746,10 @@ const MermaidEditor = () => {
 
   // Check for selected images when component mounts or when selection might change
   React.useEffect(() => {
+    if (!isOfficeReady) {
+      return undefined;
+    }
     let isMounted = true;
-    let initialTimeoutId = null;
     let selectionHandlerRegistered = false;
     let selectionCheckInProgress = false;
     let selectionCheckPending = false;
@@ -665,33 +836,28 @@ const MermaidEditor = () => {
       });
     };
 
-    // Check immediately on mount and register event handler once Office is ready
-    initialTimeoutId = setTimeout(() => {
-      checkSelectedImage();
-      registerSelectionChangedHandler();
-    }, 100);
+    // The editor may mount before the host. Subscribe and read selection only
+    // after Office is ready, including when the host takes several seconds.
+    registerSelectionChangedHandler();
+    checkSelectedImage();
 
     // Add focus listener to check for selection changes when user returns to the task pane
     window.addEventListener("focus", checkSelectedImage);
 
     return () => {
       isMounted = false;
-      if (initialTimeoutId) {
-        clearTimeout(initialTimeoutId);
-      }
-
       window.removeEventListener("focus", checkSelectedImage);
 
       removeSelectionChangedHandler();
       selectionCheckPending = false;
     };
-  }, []);
+  }, [isOfficeReady]);
 
   // Follow the Word theme using the same detection as the Fluent provider.
   React.useEffect(() => {
     setIsDarkOfficeTheme(isOfficeDark());
     return subscribeOfficeThemeChange(() => setIsDarkOfficeTheme(isOfficeDark()));
-  }, []);
+  }, [isOfficeReady]);
 
   const handleCodeChange = (newCode) => {
     if (newCode === code) {
@@ -710,22 +876,11 @@ const MermaidEditor = () => {
   };
 
   const handleEditDiagram = () => {
-    if (selectedImageCode) {
+    if (isOfficeReady && selectedImageCode) {
       handleCodeChange(selectedImageCode);
       setError(""); // Clear any previous errors
     }
   };
-
-  const renderDiagramForExport = React.useCallback(async (diagram) => {
-    const renderId = `mermaid-insert-safe-${renderIndexRef.current++}`;
-    const { svg } = await renderMermaidSvg(renderId, diagram.code, diagram.config, true);
-    return svg;
-  }, []);
-
-  const shouldRetryWithSafeSvg = React.useCallback((err) => {
-    const errorText = `${err?.message || ""} ${err?.stack || ""}`;
-    return /tainted canvases|securityerror|todataurl|failed to load svg image/i.test(errorText);
-  }, []);
 
   const handleInsertDiagram = async () => {
     if (
@@ -737,30 +892,17 @@ const MermaidEditor = () => {
     }
 
     const diagram = renderedDiagram;
+    const insertOptions = { scale: viewRef.current.scale, format: insertFormat };
     insertionInProgressRef.current = true;
     setIsInserting(true);
     const getErrorMessage = (err) => err?.message || "Failed to insert diagram into Word.";
 
     try {
       setError(""); // Clear any previous errors
-      // Always rasterise a render made for export: the preview SVG can contain
-      // <foreignObject> labels, which taint the canvas and break toDataURL().
-      const exportSvg = await renderDiagramForExport(diagram);
-      await insertDiagram(exportSvg, diagram.code, { scale: viewRef.current.scale });
+      // Insert the exact render shown in the preview, before its display zoom.
+      // The shared renderer already converts HTML labels to exportable SVG.
+      await insertDiagram(diagram.svg, diagram.code, insertOptions);
     } catch (err) {
-      if (shouldRetryWithSafeSvg(err)) {
-        try {
-          console.warn("Retrying diagram insertion with the preview SVG...");
-          await insertDiagram(diagram.svg, diagram.code, { scale: viewRef.current.scale });
-          setError("");
-          return;
-        } catch (retryErr) {
-          console.error("Insert diagram retry error:", retryErr);
-          setError(getErrorMessage(retryErr));
-          return;
-        }
-      }
-
       console.error("Insert diagram error:", err);
       setError(getErrorMessage(err));
     } finally {
@@ -775,22 +917,39 @@ const MermaidEditor = () => {
     <section className={styles.root} aria-label="Mermaid editor">
       <div className={styles.editorPreview}>
         <Field className={styles.editorField}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
+          <div className={styles.editorHeader}>
             <Text size="300" weight="semibold">
               Mermaid Code
             </Text>
+            <CenteredDropdown
+              placeholder="Example"
+              aria-label="Example"
+              value={selectedExample?.label || ""}
+              selectedOptions={selectedExample ? [selectedExample.id] : []}
+              onOptionSelect={(event, data) => {
+                const example = DIAGRAM_EXAMPLES.find((item) => item.id === data.optionValue);
+                if (example) {
+                  handleCodeChange(example.code);
+                }
+              }}
+            >
+              {DIAGRAM_EXAMPLES.map((example) => (
+                <Option
+                  key={example.id}
+                  value={example.id}
+                  title={example.title}
+                  className={styles.dropdownOption}
+                >
+                  {example.label}
+                </Option>
+              ))}
+            </CenteredDropdown>
           </div>
           <div className={styles.codeMirrorWrapper}>
             <CodeMirror
               value={code}
               onChange={handleCodeChange}
+              onCreateEditor={markEditorReady}
               height="260px"
               theme="none"
               extensions={editorExtensions}
@@ -803,19 +962,29 @@ const MermaidEditor = () => {
             <Text size="300" weight="semibold">
               Preview
             </Text>
-            <Dropdown
-              className={styles.themeSelector}
-              value={theme}
+            <CenteredDropdown
+              value={MERMAID_THEMES.find((item) => item.value === theme)?.label || "Default"}
+              selectedOptions={[theme]}
               onOptionSelect={handleThemeChange}
               aria-label="Mermaid theme"
             >
-              <Option value="default">Default</Option>
-              <Option value="dark">Dark</Option>
-              <Option value="forest">Forest</Option>
-              <Option value="neutral">Neutral</Option>
-            </Dropdown>
+              {MERMAID_THEMES.map((item) => (
+                <Option key={item.value} value={item.value} className={styles.dropdownOption}>
+                  {item.label}
+                </Option>
+              ))}
+            </CenteredDropdown>
           </div>
-          <div ref={previewContainerRef} className={previewContainerClassName}>
+          <div
+            ref={previewContainerRef}
+            className={previewContainerClassName}
+            aria-busy={!hasCompletedInitialRender}
+          >
+            {!hasCompletedInitialRender && (
+              <Text size="200" className={styles.previewPlaceholder}>
+                Your diagram will appear here
+              </Text>
+            )}
             <div className={styles.zoomControlsWrapper}>
               <div className={styles.zoomControls}>
                 {" "}
@@ -863,13 +1032,71 @@ const MermaidEditor = () => {
           </div>
         </div>
       </div>
+      {!isOfficeReady && officeStatus !== "connecting" && (
+        <Text role="status" className={styles.description}>
+          {OFFICE_STATUS_MESSAGES[officeStatus]}
+        </Text>
+      )}
       <div className={styles.buttonContainer}>
-        <Button appearance="secondary" onClick={handleEditDiagram} disabled={!hasSelectedImage}>
+        <Button
+          appearance="secondary"
+          onClick={handleEditDiagram}
+          disabled={!isOfficeReady || !hasSelectedImage}
+        >
           Edit Selected
         </Button>
-        <Button appearance="primary" onClick={handleInsertDiagram} disabled={!canInsert}>
-          Insert | Replace
-        </Button>
+        <Menu
+          checkedValues={{ format: [insertFormat] }}
+          onCheckedValueChange={(event, data) => {
+            if (data.name === "format" && data.checkedItems.length) {
+              setInsertFormat(data.checkedItems[0]);
+            }
+          }}
+        >
+          <MenuTrigger disableButtonEnhancement>
+            {(triggerProps) => (
+              <SplitButton
+                appearance="primary"
+                primaryActionButton={{
+                  onClick: handleInsertDiagram,
+                  disabled: !canInsert,
+                  "aria-label": "Insert | Replace",
+                  title: `Insert or replace as ${insertFormat.toUpperCase()}`,
+                }}
+                menuButton={{
+                  ...triggerProps,
+                  disabled: isInserting,
+                  "aria-label": `Insert format: ${insertFormat.toUpperCase()}`,
+                  title: "Choose PNG or SVG",
+                }}
+              >
+                Insert | Replace
+                <span className={styles.formatLabel} aria-hidden="true">
+                  {insertFormat.toUpperCase()}
+                </span>
+              </SplitButton>
+            )}
+          </MenuTrigger>
+          <MenuPopover className={styles.formatMenu}>
+            <MenuList>
+              {["png", "svg"].map((format) => (
+                <MenuItemRadio
+                  key={format}
+                  name="format"
+                  value={format}
+                  className={mergeClasses(styles.formatOption, styles.dropdownOption)}
+                  checkmark={{
+                    className: styles.formatCheckmark,
+                    children: <CheckmarkFilled />,
+                  }}
+                  content={{ className: styles.formatOptionContent }}
+                >
+                  {format.toUpperCase()}
+                </MenuItemRadio>
+              ))}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
       </div>
       {error && (
         <div role="alert" className={styles.error}>

@@ -11,9 +11,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-> A Mermaid diagramming tool built for Microsoft Word: live preview and one-click insertion of high-resolution images.
+> A Mermaid diagramming tool built for Microsoft Word: live preview and one-click insertion of high-resolution PNG or vector SVG images.
 >
-> The Mermaid source is saved with each diagram, so you can select an image and edit it again.
+> Both formats save the Mermaid source with each diagram, so you can select an image to edit it again or switch formats.
 
 ## Contents
 
@@ -86,14 +86,15 @@
     </tr>
   </table>
 
-  The syntax supported by this project follows Mermaid 10.x. See the [Mermaid documentation](https://mermaid.js.org/) for more examples and version-specific limitations.
+  The syntax supported by this project follows Mermaid 12.3.x. The official ZenUML extension is bundled and registered automatically. See the [Mermaid documentation](https://mermaid.js.org/) for more examples and version-specific limitations.
 
-- **Rich editing experience**: Mermaid syntax highlighting, keyword completion, code folding, inline syntax diagnostics, and line wrapping. Flowcharts, sequence diagrams, mindmaps, pie charts, journeys, requirement diagrams, and Gantt charts are fully highlighted by the upstream grammar; class, state, ER, Git graph, and timeline diagrams use a lighter lexical highlighter.
+- **Built-in examples**: **Example** provides 35 diagram examples from the same sources as [Mermaid Live Editor](https://mermaid-live.nodejs.cn/edit): one default per diagram type from `@mermaid-js/examples`, plus ZenUML's **Order Service**. Common types appear first and the rest are sorted by name in a scrollable menu. Examples are bundled locally and selecting one replaces the current editor text.
+
+- **Rich editing experience**: Mermaid syntax highlighting, keyword completion, code folding, inline syntax diagnostics, and line wrapping. Flowcharts, sequence diagrams, mindmaps, pie charts, journeys, requirement diagrams, and Gantt charts are fully highlighted by the upstream grammar; the remaining diagram types use a lighter lexical highlighter that follows the detected diagram type.
 - **Live preview**: See the rendered diagram while you edit. Zoom with the mouse wheel or the zoom buttons, reset the view, and drag to pan around larger diagrams.
-- **Zoom-driven insert size**: The preview zoom level also sets the inserted image size. At 100%, the diagram is inserted at its natural size, capped to the writable page area; zooming out shrinks the inserted image.
 - **Theme selection**: Switch between the default, forest, dark, and neutral Mermaid themes.
-- **Re-edit inserted diagrams**: Select an image created by the add-in, click **Edit Selected**, update the source, and replace the original diagram.
-- **High-quality output**: Diagrams are fitted to the available page area and inserted as high-resolution PNG images.
+- **High-quality output**: Insert high-resolution PNG or vector SVG images. Choose the format from the dropdown on the right of **Insert | Replace**.
+- **Shared re-editing**: Both PNG and SVG support re-editing. Select a picture, click **Edit Selected**, update the source, and replace it in either format.
 
 ## Quick Start
 
@@ -135,7 +136,7 @@
 
 ### Environment
 
-- Node.js and npm
+- Node.js 22.12+ and npm (required by Mermaid 12 and the ZenUML extension)
 - Git
 - Word
 

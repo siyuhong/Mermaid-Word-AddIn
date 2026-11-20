@@ -3,19 +3,89 @@
 
 <!doctype html>
 <html lang="en" data-framework="javascript">
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contoso Task Pane Add-in</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mermaid for Word</title>
 
-    <!-- Office JavaScript API -->
-    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-</head>
+    <style>
+      .startup-shell {
+        padding: 24px 20px 32px;
+        min-height: 100vh;
+        box-sizing: border-box;
+        background: #ffffff;
+        color: #242424;
+        font:
+          14px "Segoe UI",
+          sans-serif;
+      }
+      .startup-label {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .startup-editor,
+      .startup-preview {
+        border: 1px solid #d1d1d1;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .startup-editor {
+        height: 262px;
+        margin-bottom: 20px;
+      }
+      .startup-code-lines {
+        width: 70%;
+        height: 108px;
+        margin: 16px;
+        background: repeating-linear-gradient(to bottom, #ebebeb 0 6px, transparent 6px 18px);
+      }
+      .startup-preview {
+        min-height: 240px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 12px;
+        background: #fafafa;
+        color: #616161;
+        font-size: 12px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .startup-shell {
+          background: #292929;
+          color: #ffffff;
+        }
+        .startup-editor,
+        .startup-preview {
+          border-color: #525252;
+        }
+        .startup-code-lines {
+          background: repeating-linear-gradient(to bottom, #424242 0 6px, transparent 6px 18px);
+        }
+        .startup-preview {
+          background: #1f1f1f;
+          color: #adadad;
+        }
+      }
+    </style>
+  </head>
 
-<body style="width: 100%; height: 100%; margin: 0; padding: 0;">
-    <div id="container"></div>
+  <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+    <div id="container">
+      <!-- A static editor outline bridges script loading without adding
+           another loading screen after Word's own startup indicator. -->
+      <div class="startup-shell" aria-busy="true" aria-label="Mermaid editor">
+        <div class="startup-label">Mermaid Code</div>
+        <div class="startup-editor" aria-hidden="true">
+          <div class="startup-code-lines"></div>
+        </div>
+        <div class="startup-label">Preview</div>
+        <div class="startup-preview">Your diagram will appear here</div>
+      </div>
+    </div>
 
     <!-- 
         Fluent UI React v. 9 uses modern JavaScript syntax that is not supported in
@@ -24,18 +94,29 @@
         following div display when an unsupported webview is in use, and hides the 
         React container div. 
     -->
-    <div id="tridentmessage" style="display: none; padding: 10;">
-        This add-in will not run in your version of Office. Please upgrade either to perpetual Office 2021 (or later) 
-        or to a Microsoft 365 account.
+    <div id="tridentmessage" style="display: none; padding: 10">
+      This add-in will not run in your version of Office. Please upgrade either to perpetual Office
+      2021 (or later) or to a Microsoft 365 account.
     </div>
     <script>
-        if ((navigator.userAgent.indexOf("Trident") !== -1) || (navigator.userAgent.indexOf("Edge") !== -1)) {
-            var tridentMessage = document.getElementById("tridentmessage");
-            var normalContainer = document.getElementById("container");
-            tridentMessage.style.display = "block";
-            normalContainer.style.display = "none";
-        } 
+      if (window.performance && window.performance.mark) {
+        window.performance.mark("addin:bootstrap");
+      }
+      if (
+        navigator.userAgent.indexOf("Trident") !== -1 ||
+        navigator.userAgent.indexOf("Edge") !== -1
+      ) {
+        var tridentMessage = document.getElementById("tridentmessage");
+        var normalContainer = document.getElementById("container");
+        tridentMessage.style.display = "block";
+        normalContainer.style.display = "none";
+      }
     </script>
-</body>
-
+    <!-- Keep Office.js before the deferred app scripts, but after the static
+         editor outline so a slow CDN does not leave an empty document. -->
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
+  </body>
 </html>

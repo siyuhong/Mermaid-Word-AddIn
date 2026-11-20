@@ -1,126 +1,27 @@
 // Lexical fallback for Mermaid diagram types that codemirror-lang-mermaid
 // 0.5.0 does not have a Lezer grammar for. It is intentionally shallow: the
 // goal is readable colour, not semantic validation.
+//
+// The vocabulary lives in diagramRegistry.js so the header keywords, the
+// per-type statements and the completion list cannot drift apart.
 
-export const DIAGRAM_TYPES = [
-  "classDiagram",
-  "classDiagram-v2",
-  "stateDiagram-v2",
-  "stateDiagram",
-  "erDiagram",
-  "gitGraph",
-  "timeline",
-  "mindmap",
-  "pie",
-  "gantt",
-  "journey",
-  "requirementDiagram",
-  "flowchart",
-  "graph",
-  "sequenceDiagram",
-  // Beta / experimental types have no Lezer grammar either. Listing them keeps
-  // the diagram keyword coloured; rendering still depends on the Mermaid engine.
-  "flowchart-elk",
-  "sankey-beta",
-  "block-beta",
-  "quadrantChart",
-  "xychart-beta",
-  "C4Context",
-  "C4Container",
-  "C4Component",
-  "C4Dynamic",
-  "C4Deployment",
-  "info",
-];
+import {
+  DIAGRAM_SYNTAXES,
+  SHARED_KEYWORDS,
+  detectSyntax,
+  getKeywordsForSyntax,
+} from "../utils/diagramRegistry";
 
-export const KEYWORDS = [
-  "classDef",
-  "linkStyle",
-  "subgraph",
-  "participant",
-  "autonumber",
-  "cherry-pick",
-  "dateFormat",
-  "axisFormat",
-  "direction",
-  "class",
-  "style",
-  "state",
-  "note",
-  "section",
-  "title",
-  "excludes",
-  "includes",
-  "commit",
-  "branch",
-  "checkout",
-  "merge",
-  "actor",
-  "loop",
-  "alt",
-  "else",
-  "opt",
-  "par",
-  "and",
-  "rect",
-  "end",
-  // C4 element and relationship keywords.
-  "Person",
-  "Person_Ext",
-  "System",
-  "System_Ext",
-  "SystemDb",
-  "SystemDb_Ext",
-  "SystemQueue",
-  "SystemQueue_Ext",
-  "Container",
-  "Container_Ext",
-  "ContainerDb",
-  "ContainerDb_Ext",
-  "ContainerQueue",
-  "ContainerQueue_Ext",
-  "Component",
-  "Component_Ext",
-  "Boundary",
-  "Enterprise_Boundary",
-  "System_Boundary",
-  "Container_Boundary",
-  "Deployment_Node",
-  "Node",
-  "Node_L",
-  "Node_R",
-  "Rel",
-  "Rel_Back",
-  "Rel_Neighbor",
-  "BiRel",
-  "Rel_Up",
-  "Rel_Down",
-  "Rel_Left",
-  "Rel_Right",
-  "Rel_U",
-  "Rel_D",
-  "Rel_L",
-  "Rel_R",
-  "UpdateRelStyle",
-  "UpdateElementStyle",
-  "UpdateLayoutConfig",
-  "Lay_U",
-  "Lay_D",
-  "Lay_L",
-  "Lay_R",
-  // Block diagram statement keywords.
-  "columns",
-  "block",
-  "space",
-  // XY chart / quadrant chart axis and series keywords.
-  "x-axis",
-  "y-axis",
-  "quadrant-1",
-  "quadrant-2",
-  "quadrant-3",
-  "quadrant-4",
-  "bar",
-  "line",
+export const DIAGRAM_TYPES = DIAGRAM_SYNTAXES;
+
+export const KEYWORDS = SHARED_KEYWORDS;
+
+// Unknown header: keep colouring every known statement so a half-typed
+// document still reads well. Once a type is detected, only that type's
+// statements are coloured, which stops `title`/`note`/`set` from lighting up
+// inside unrelated diagrams.
+const ALL_KEYWORDS = [
+  ...new Set([...SHARED_KEYWORDS, ...DIAGRAM_SYNTAXES.flatMap((s) => getKeywordsForSyntax(s))]),
 ];
 
 // Ordered so that longer arrows win over their prefixes. ER endpoints
@@ -165,10 +66,24 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const longestFirst = (values) =>
   [...new Set(values)].sort((a, b) => b.length - a.length).map(escapeRegExp);
 
-const SIGNAL_PATTERN = new RegExp(
-  `\\b(${longestFirst([...DIAGRAM_TYPES, ...KEYWORDS]).join("|")})\\b`,
-  "g"
-);
+const SIGNAL_CACHE = new Map();
+
+const buildSignalPattern = (keywords) =>
+  new RegExp(`\\b(${longestFirst([...DIAGRAM_TYPES, ...keywords]).join("|")})\\b`, "g");
+
+// The vocabulary only changes when the detected diagram type changes, so the
+// compiled pattern is cached per syntax instead of rebuilt on every keystroke.
+const getSignalPattern = (syntax) => {
+  let pattern = SIGNAL_CACHE.get(syntax);
+  if (!pattern) {
+    pattern = buildSignalPattern(
+      syntax ? [...SHARED_KEYWORDS, ...getKeywordsForSyntax(syntax)] : ALL_KEYWORDS
+    );
+    SIGNAL_CACHE.set(syntax, pattern);
+  }
+  return pattern;
+};
+
 const ARROW_PATTERN = new RegExp(longestFirst(ARROWS).join("|"), "g");
 const STRING_PATTERN = /"[^"\n]*"|'[^'\n]*'/g;
 const COMMENT_PATTERN = /%%.*/g;
@@ -221,7 +136,9 @@ const maskSpans = (text, spans) => {
 
 // Returns line-relative spans. `parsed` means a real Lezer sub-tree already
 // covers the line; only comments and inline config are filled in then.
-export function scanLine(text, parsed = false) {
+// `signalPattern` is supplied by scanDocument so the vocabulary can follow the
+// detected diagram type.
+export function scanLine(text, parsed = false, signalPattern = getSignalPattern("")) {
   const spans = [];
   const leading = text.length - text.trimStart().length;
   const content = text.slice(leading);
@@ -246,8 +163,8 @@ export function scanLine(text, parsed = false) {
     pushIfFree(spans, leading + item.from, leading + item.to, item.className);
   }
 
-  SIGNAL_PATTERN.lastIndex = 0;
-  const signal = SIGNAL_PATTERN.exec(content);
+  signalPattern.lastIndex = 0;
+  const signal = signalPattern.exec(content);
   if (signal) {
     pushIfFree(spans, leading + signal.index, leading + signal.index + signal[1].length, "keyword");
   }
@@ -304,6 +221,8 @@ export function scanLine(text, parsed = false) {
 export function scanDocument(doc, parsed = false) {
   const spans = [];
   let inFrontmatter = false;
+  // One detection per document keeps the per-line scanner cheap.
+  const signalPattern = getSignalPattern(detectSyntax(doc.toString()));
 
   for (let index = 1; index <= doc.lines; index += 1) {
     const line = doc.line(index);
@@ -319,7 +238,7 @@ export function scanDocument(doc, parsed = false) {
         inFrontmatter = false;
       }
     } else {
-      for (const item of scanLine(line.text, parsed)) {
+      for (const item of scanLine(line.text, parsed, signalPattern)) {
         spans.push(span(line.from + item.from, line.from + item.to, item.className));
       }
     }

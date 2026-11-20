@@ -10,12 +10,12 @@ const useStyles = makeStyles({
   },
 });
 
-const App = () => {
+const App = ({ officeStatus }) => {
   const styles = useStyles();
 
   return (
     <div className={styles.root}>
-      <MermaidEditor />
+      <MermaidEditor officeStatus={officeStatus} />
     </div>
   );
 };

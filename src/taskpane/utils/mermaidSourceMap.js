@@ -1,7 +1,10 @@
-// Mermaid 10.9 preprocesses input before reporting parser locations. Keep the
-// UTF-16 source offsets through the same removals and entity substitutions.
-// Recheck these rules against Mermaid's preprocessDiagram/encodeEntities when
-// upgrading the engine. This mapping is only built after a parse failure.
+// Mermaid preprocesses input before reporting parser locations. Keep the
+// UTF-16 source offsets through the same removals Mermaid 12 performs in
+// `preprocessDiagram` (cleanupText -> frontmatter -> directives -> comments).
+//
+// Recheck these rules against `cleanupText`/`frontMatterRegex`/`directiveRegex`
+// in mermaidAPI when upgrading the engine; a mismatch only shifts the underline
+// of a parse error, so this stays a best-effort mapper.
 export function getMermaidSourcePosition(code, line, column) {
   let text = code;
   let offsets = Array.from({ length: code.length }, (_, index) => index);
@@ -10,6 +13,7 @@ export function getMermaidSourcePosition(code, line, column) {
     const parts = [];
     const mapped = [];
     let start = 0;
+    // matchAll requires the global flag; every rule below has it.
     for (const match of text.matchAll(pattern)) {
       const value = typeof replacement === "function" ? replacement(match[0]) : replacement;
       parts.push(text.slice(start, match.index), value);
@@ -28,18 +32,17 @@ export function getMermaidSourcePosition(code, line, column) {
     offsets = mapped.flat();
   };
 
+  // cleanupText: normalise line endings, then single-quote HTML attributes.
   replace(/\r\n?/g, "\n");
   replace(/<(\w+)([^>]*)>/g, (tag) => tag.replace(/="([^"]*)"/g, "='$1'"));
-  replace(/^-{3}\s*[\n\r](.*?)[\n\r]-{3}\s*[\n\r]+/gs, "");
+  // processFrontmatter: leading indentation is captured, so the fence can be
+  // nested inside another document.
+  replace(/^([^\S\n\r]*)-{3}\s*[\n\r](.*?)[\n\r]\1-{3}\s*[\n\r]+/gs, "");
+  // processDirectives: every `%%{init: ...}%%` and `%%{wrap}%%`.
   replace(/%{2}{\s*(?:(\w+)\s*:|(\w+))\s*(?:(\w+)|((?:(?!}%{2}).|\r?\n)*))?\s*(?:}%{2})?/gi, "");
+  // cleanupComments: whole-line comments, then trim the leading whitespace.
   replace(/^\s*%%(?!{)[^\n]+\n?/gm, "");
-  replace(/^\s+/g, "");
-  replace(/style.*:\S*#.*;/g, (match) => match.slice(0, -1));
-  replace(/classDef.*:\S*#.*;/g, (match) => match.slice(0, -1));
-  replace(/#\w+;/g, (match) => {
-    const entity = match.slice(1, -1);
-    return `${/^\+?\d+$/.test(entity) ? "ﬂ°°" : "ﬂ°"}${entity}¶ß`;
-  });
+  replace(/^\s+/, "");
 
   const lines = text.split("\n");
   const lineIndex = Math.min(Math.max(line - 1, 0), lines.length - 1);
