@@ -7,6 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mermaid-word-addin.pages.dev/"><img src="https://img.shields.io/static/v1?label=%E9%83%A8%E7%BD%B2%E7%AB%99%E7%82%B9&message=mermaid--word--addin.pages.dev&color=2b579a" alt="部署站点"></a>
+  <a href="https://mermaid-word-addin.pages.dev/manifest.xml"><img src="https://img.shields.io/static/v1?label=%E5%8A%A0%E8%BD%BD%E9%A1%B9&message=%E4%B8%8B%E8%BD%BD%20manifest.xml&color=107c10" alt="下载 manifest.xml"></a>
 </p>
 
 [English](README.md) | **简体中文**
@@ -97,6 +98,8 @@
 - **统一重新编辑**：PNG 和 SVG 均支持再次编辑。选中图片后点击 **Edit Selected**，修改后可选择任一格式替换原图。
 
 ## 快速使用
+
+请先下载 [`manifest.xml`](https://mermaid-word-addin.pages.dev/manifest.xml)。
 
 ### Word 网页版
 

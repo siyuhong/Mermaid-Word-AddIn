@@ -82,7 +82,7 @@ If the last check returns the home page or a 200 response, verify that `public/4
 - **Build error `Set ADDIN_BASE_URL ...`**: The Production environment variable is not configured, or it was configured only for Preview.
 - **Build error `ADDIN_BASE_URL must be a deployed HTTPS URL ...`**: The URL is not HTTPS, contains a query string, fragment, username, or password, or still points to `localhost`.
 - **Blank task pane or certificate error in Word**: Confirm that you are using the production domain rather than `localhost:3000`, and check that the URLs in the manifest match the current domain.
-- **Word still shows an old version after redeployment**: `public/_headers` sets `no-cache` for all resources, but Word may still cache the manifest. Upload the manifest again or restart Word; if necessary, clear the WebView2 cache.
+- **Word still shows an old version after redeployment**: `public/_headers` revalidates HTML and the manifest, while content-hashed JavaScript files are cached immutably. Word may still cache the manifest; upload it again or restart Word. If necessary, clear the WebView2 cache.
 - **The task pane cannot be embedded in Word on the web**: Do not add `X-Frame-Options` to the site, and do not restrict `frame-ancestors` with a CSP header.
 
 ## Official references

@@ -30,9 +30,9 @@ import { syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { foldByIndent } from "codemirror-lang-mermaid";
 import { insertDiagram, getSelectedImageAltText } from "../taskpane";
-import { renderMermaidSvg } from "../utils/mermaidRenderer";
 import { readSvgGeometry, fitIntoBox } from "../utils/diagramUtils";
 import { DIAGRAM_EXAMPLES } from "../utils/diagramExamples";
+import { loadMermaidRenderer } from "../utils/mermaidRuntime";
 import { isOfficeDark, subscribeOfficeThemeChange } from "../utils/officeTheme";
 import { markStartup } from "../utils/startupPerformance";
 
@@ -680,6 +680,7 @@ const MermaidEditor = ({ officeStatus = "connecting" }) => {
       try {
         const renderId = `mermaid-diagram-${renderIndexRef.current++}`;
         console.log("Rendering Mermaid diagram with ID:", renderId);
+        const { renderMermaidSvg } = await loadMermaidRenderer();
         const { svg } = await renderMermaidSvg(renderId, code, mermaidConfig);
         console.log("Mermaid diagram rendered successfully, SVG length:", svg.length);
 
@@ -716,10 +717,8 @@ const MermaidEditor = ({ officeStatus = "connecting" }) => {
       clearTimeout(debounceTimerRef.current);
     }
 
-    debounceTimerRef.current = setTimeout(
-      renderDiagram,
-      renderIndexRef.current === 0 ? 0 : PREVIEW_DEBOUNCE_MS
-    );
+    const initialDelay = renderIndexRef.current === 0 ? 0 : PREVIEW_DEBOUNCE_MS;
+    debounceTimerRef.current = setTimeout(renderDiagram, initialDelay);
 
     return () => {
       isActive = false;

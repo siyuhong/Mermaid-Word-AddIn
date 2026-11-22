@@ -7,6 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mermaid-word-addin.pages.dev/"><img src="https://img.shields.io/static/v1?label=Deployed%20site&message=mermaid--word--addin.pages.dev&color=2b579a" alt="Deployed site"></a>
+  <a href="https://mermaid-word-addin.pages.dev/manifest.xml"><img src="https://img.shields.io/static/v1?label=Add-in&message=Download%20manifest.xml&color=107c10" alt="Download manifest.xml"></a>
 </p>
 
 **English** | [简体中文](README.zh-CN.md)
@@ -97,6 +98,8 @@
 - **Shared re-editing**: Both PNG and SVG support re-editing. Select a picture, click **Edit Selected**, update the source, and replace it in either format.
 
 ## Quick Start
+
+Download [`manifest.xml`](https://mermaid-word-addin.pages.dev/manifest.xml) before installing.
 
 ### Word on the web
 

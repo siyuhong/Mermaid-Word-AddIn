@@ -1,5 +1,5 @@
 import { linter } from "@codemirror/lint";
-import { validateMermaidCode } from "../utils/mermaidRenderer";
+import { loadMermaidRenderer } from "../utils/mermaidRuntime";
 import { getMermaidSourcePosition } from "../utils/mermaidSourceMap";
 
 const MESSAGE_LIMIT = 220;
@@ -82,6 +82,7 @@ export const mermaidLinter = linter(
     }
 
     try {
+      const { validateMermaidCode } = await loadMermaidRenderer();
       await validateMermaidCode(code);
       return [];
     } catch (error) {

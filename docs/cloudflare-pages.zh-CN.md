@@ -82,7 +82,7 @@
 - **构建报错 `Set ADDIN_BASE_URL ...`**：Production 环境变量未配置，或只配置到了 Preview。
 - **构建报错 `ADDIN_BASE_URL must be a deployed HTTPS URL ...`**：地址不是 HTTPS，或带了查询串、锚点、账号密码，或仍指向 `localhost`。
 - **Word 里任务窗格空白或报证书错误**：确认访问的是生产域名而不是 `localhost:3000`，并检查清单中的 URL 与当前域名是否一致。
-- **重新部署后 Word 仍是旧版本**：`public/_headers` 已对全部资源设置 `no-cache`，但 Word 仍可能缓存清单。重新上传清单或重启 Word；必要时清理 WebView2 缓存。
+- **重新部署后 Word 仍是旧版本**：`public/_headers` 会让 HTML 与清单每次重新校验，而带内容哈希的 JavaScript 会长期缓存。Word 仍可能缓存清单，请重新上传或重启 Word；必要时清理 WebView2 缓存。
 - **任务窗格无法在 Word 网页版内嵌**：不要给站点添加 `X-Frame-Options`，或限制 `frame-ancestors` 的 CSP header。
 
 ## 官方参考

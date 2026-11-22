@@ -4,7 +4,6 @@ const { URL } = require("node:url");
 const devCerts = require("office-addin-dev-certs");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const webpack = require("webpack");
 
 const urlDev = "https://localhost:3000/";
 
@@ -43,7 +42,6 @@ module.exports = async (env = {}, options = {}) => {
   const config = {
     devtool: dev ? "source-map" : false,
     entry: {
-      polyfill: ["core-js/stable", "regenerator-runtime/runtime"],
       react: ["react", "react-dom"],
       taskpane: {
         import: ["./src/taskpane/index.jsx", "./src/taskpane/taskpane.html"],
@@ -53,6 +51,8 @@ module.exports = async (env = {}, options = {}) => {
     },
     output: {
       clean: true,
+      filename: "[name].[contenthash:8].js",
+      chunkFilename: "[id].[contenthash:8].js",
     },
     resolve: {
       extensions: [".js", ".jsx", ".html"],
@@ -90,7 +90,7 @@ module.exports = async (env = {}, options = {}) => {
       new HtmlWebpackPlugin({
         filename: "taskpane.html",
         template: "./src/taskpane/taskpane.html",
-        chunks: ["polyfill", "taskpane", "react"],
+        chunks: ["taskpane", "react"],
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -125,16 +125,14 @@ module.exports = async (env = {}, options = {}) => {
       new HtmlWebpackPlugin({
         filename: "commands.html",
         template: "./src/commands/commands.html",
-        chunks: ["polyfill", "commands"],
-      }),
-      new webpack.ProvidePlugin({
-        Promise: ["es6-promise", "Promise"],
+        chunks: ["commands"],
       }),
     ],
     devServer: {
       hot: true,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
       },
       server: {
         type: "https",

@@ -8,6 +8,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mermaid for Word</title>
+    <link rel="preconnect" href="https://appsforoffice.microsoft.com" />
+    <link rel="dns-prefetch" href="https://appsforoffice.microsoft.com" />
 
     <style>
       .startup-shell {
@@ -87,7 +89,23 @@
       </div>
     </div>
 
-    <!-- 
+    <script>
+      // Start Office.js in parallel with the app bundle. Rendering the editor
+      // and inserting the diagram wait for this promise, so a slow CDN no
+      // longer blocks the task pane from painting.
+      window.__officeJsReady = new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = "https://appsforoffice.microsoft.com/lib/1/hosted/office.js";
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = function () {
+          reject(new Error("Could not load Office.js"));
+        };
+        document.head.appendChild(script);
+      });
+    </script>
+
+    <!--
         Fluent UI React v. 9 uses modern JavaScript syntax that is not supported in
         Trident (Internet Explorer) or EdgeHTML (Edge Legacy), so this add-in won't
         work in Office versions that use these webviews. The script below makes the 
@@ -112,11 +130,5 @@
         normalContainer.style.display = "none";
       }
     </script>
-    <!-- Keep Office.js before the deferred app scripts, but after the static
-         editor outline so a slow CDN does not leave an empty document. -->
-    <script
-      type="text/javascript"
-      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
-    ></script>
   </body>
 </html>

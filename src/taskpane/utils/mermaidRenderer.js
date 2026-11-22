@@ -141,12 +141,10 @@ function centerStateExportLabels(svg) {
 export function renderMermaidSvg(id, code, config) {
   const request = renderQueue.then(async () => {
     await ensureExternalDiagrams();
-    const isMindmap = mermaid.detectType(code, config) === "mindmap";
     mermaid.initialize({
-      // Let mindmap choose its native cose-bilkent layout. Forcing ELK here
-      // crashes Mermaid 12's mindmap renderer. Other diagrams default to ELK;
-      // explicit caller settings, frontmatter and directives still take priority.
-      ...(isMindmap ? {} : { layout: "elk" }),
+      // Leave layout unset so each diagram uses Mermaid's native default
+      // (currently ELK for graph layouts, cose-bilkent for mindmaps). Caller
+      // settings, frontmatter and directives can still override it.
       ...config,
       themeVariables: { ...config.themeVariables },
     });

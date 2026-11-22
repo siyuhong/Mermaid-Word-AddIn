@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import App from "./components/App";
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { isOfficeDark, subscribeOfficeThemeChange } from "./utils/officeTheme";
+import { waitForOfficeReady } from "./utils/officeRuntime";
 import { markStartup } from "./utils/startupPerformance";
 
-/* global document, Office, module, require */
+/* global document, module, require */
 
 markStartup("app-entry");
 
@@ -24,7 +25,7 @@ const RootApp = ({ AppComponent }) => {
     let active = true;
     const initializeOffice = async () => {
       try {
-        const info = await Office.onReady();
+        const info = await waitForOfficeReady();
         markStartup("office-ready");
         if (active) {
           setOfficeStatus(info.host === "Word" ? "ready" : "unavailable");
